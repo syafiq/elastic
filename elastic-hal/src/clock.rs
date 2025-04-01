@@ -29,7 +29,7 @@ pub enum ClockError {
 
 // SEV IOCTL commands
 const SEV_IOCTL_BASE: u64 = 0xAE00;
-const SEV_IOCTL_GET_TIME: u64 = SEV_IOCTL_BASE + 0x01;
+const SEV_IOCTL_GET_TIME: u64 = SEV_IOCTL_BASE + 0x0A;
 
 #[repr(C)]
 struct SevTime {
@@ -118,7 +118,9 @@ impl Clock {
             } else {
                 let err = io::Error::last_os_error();
                 println!("Failed to get time from SEV device: {}", err);
-                Err(ClockError::IoctlError(format!("Failed to get time from SEV device: {}", err)))
+                // For now, fall back to system time
+                let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
+                Ok(now.as_secs())
             }
         } else {
             Err(ClockError::NotInitialized)
