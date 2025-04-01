@@ -1,15 +1,10 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
-use std::path::PathBuf;
-use std::fs;
-use std::env;
 use std::io;
 use std::os::unix::fs::MetadataExt;
-use std::os::unix::io::{AsRawFd, RawFd};
-use iocuddle::{Ioctl, IoctlResult};
+use std::os::unix::io::AsRawFd;
+use iocuddle::Ioctl;
 use std::fs::File;
-use std::io::{self, Read, Write};
-use std::path::Path;
 
 #[derive(Debug, Error)]
 pub enum ClockError {
@@ -37,7 +32,7 @@ const SEV_IOCTL_BASE: u32 = 0xAE00;
 const SEV_IOCTL_GET_TIME: u32 = SEV_IOCTL_BASE + 1;
 
 // Define the ioctl command
-const SEV_GET_TIME: Ioctl<(), u64> = unsafe { Ioctl::new(SEV_IOCTL_GET_TIME) };
+const SEV_GET_TIME: Ioctl<iocuddle::Read, u64> = unsafe { Ioctl::classic(SEV_IOCTL_GET_TIME) };
 
 pub struct Clock {
     sev_fd: Option<File>,
@@ -71,9 +66,9 @@ impl Clock {
             match std::fs::metadata(path) {
                 Ok(metadata) => {
                     println!("{} exists with permissions: {:o}", path, metadata.mode() & 0o777);
-                    if let Ok(file) = File::open(path) {
+                    if let Ok(_) = File::open(path) {
                         println!("  Can open for reading");
-                        if let Ok(file) = File::options().read(true).write(true).open(path) {
+                        if let Ok(_) = File::options().read(true).write(true).open(path) {
                             println!("  Can open for read/write");
                         }
                     }
@@ -102,7 +97,7 @@ impl Clock {
             let fd = file.as_raw_fd();
             
             // Try to get time from SEV device
-            match unsafe { SEV_GET_TIME.ioctl(fd, ()) } {
+            match unsafe { SEV_GET_TIME.read(fd) } {
                 Ok(time) => {
                     println!("Successfully got time from SEV device: {}", time);
                     Ok(time)
@@ -112,7 +107,7 @@ impl Clock {
                     // Fallback to system time
                     Ok(SystemTime::now()
                         .duration_since(UNIX_EPOCH)
-                        .map_err(|e| ClockError::IoError(e))?
+                        .map_err(|e| ClockError::SystemTimeError(e))?
                         .as_secs())
                 }
             }
@@ -120,7 +115,7 @@ impl Clock {
             // Fallback to system time if SEV is not available
             Ok(SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map_err(|e| ClockError::IoError(e))?
+                .map_err(|e| ClockError::SystemTimeError(e))?
                 .as_secs())
         }
     }
