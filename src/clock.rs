@@ -1,16 +1,31 @@
 #[repr(C)]
 #[derive(Debug, Default)]
-struct SevStatus {
-    major: u32,
-    minor: u32,
-    state: u32,
-    _reserved: u32,
+struct SnpGuestRequestIoctl {
+    msg_version: u8,
+    req_data: u64,
+    resp_data: u64,
+    exitinfo2: u64,
+}
+
+#[repr(C)]
+#[derive(Debug, Default)]
+struct SnpReportReq {
+    user_data: [u8; 64],
+    vmpl: u32,
+    rsvd: [u8; 28],
+}
+
+#[repr(C)]
+#[derive(Debug, Default)]
+struct SnpReportResp {
+    data: [u8; 4000],
 }
 
 // SEV IOCTL commands
-const SEV: Group = Group::new(0xae);
-// Try SNP command number - 0x2
-const SEV_GET_STATUS: Ioctl<Read, &SevStatus> = unsafe { SEV.read(0x2) };
+const SNP_GUEST_REQ_IOC_TYPE: u8 = b'S';
+const SNP_GET_REPORT: Ioctl<WriteRead, &SnpGuestRequestIoctl> = unsafe { 
+    Ioctl::classic((SNP_GUEST_REQ_IOC_TYPE as u32) << 8 | 0x0)
+};
 
 pub fn init(&mut self) -> Result<(), ClockError> {
     println!("Initializing Clock Interface...");
@@ -80,20 +95,29 @@ fn check_sev_environment(&self) -> Result<bool, ClockError> {
     if let Some(file) = &self.sev_fd {
         // Print diagnostic information about the ioctl command
         println!("\nAttempting SEV ioctl:");
-        println!("Struct size: {} bytes", std::mem::size_of::<SevStatus>());
-        println!("Struct alignment: {} bytes", std::mem::align_of::<SevStatus>());
+        println!("Struct size: {} bytes", std::mem::size_of::<SnpGuestRequestIoctl>());
+        println!("Struct alignment: {} bytes", std::mem::align_of::<SnpGuestRequestIoctl>());
         
-        // Try to get status
-        match SEV_GET_STATUS.ioctl(file) {
-            Ok((_, status)) => {
-                println!("SEV Status:");
-                println!("  Major: {}", status.major);
-                println!("  Minor: {}", status.minor);
-                println!("  State: {}", status.state);
+        // Create request and response structures
+        let mut req = SnpReportReq::default();
+        let mut resp = SnpReportResp::default();
+        
+        // Create ioctl request
+        let mut ioctl_req = SnpGuestRequestIoctl {
+            msg_version: 1,
+            req_data: &req as *const _ as u64,
+            resp_data: &mut resp as *mut _ as u64,
+            exitinfo2: 0,
+        };
+        
+        // Try to get SNP report
+        match SNP_GET_REPORT.ioctl(file, &mut ioctl_req) {
+            Ok(_) => {
+                println!("Successfully got SNP report");
                 Ok(true)
             }
             Err(err) => {
-                println!("Failed to get SEV status: {}", err);
+                println!("Failed to get SNP report: {}", err);
                 println!("Error code: {}", err.kind());
                 println!("Error message: {}", err.to_string());
                 println!("Raw errno: {}", err.raw_os_error().unwrap_or(-1));
