@@ -29,7 +29,13 @@ pub enum ClockError {
 
 // SEV IOCTL commands
 const SEV_IOCTL_BASE: u64 = 0xAE00;
-const SEV_IOCTL_GET_TIME: u64 = SEV_IOCTL_BASE + 1;
+const SEV_IOCTL_GET_TIME: u64 = SEV_IOCTL_BASE + 0x01;
+
+#[repr(C)]
+struct SevTime {
+    seconds: u64,
+    nanoseconds: u32,
+}
 
 pub struct Clock {
     sev_fd: Option<File>,
@@ -91,35 +97,31 @@ impl Clock {
     pub fn get_time(&self) -> Result<u64, ClockError> {
         if let Some(file) = &self.sev_fd {
             let fd = file.as_raw_fd();
-            let mut time: u64 = 0;
+            let mut time = SevTime {
+                seconds: 0,
+                nanoseconds: 0,
+            };
             
             // Try to get time from SEV device using direct ioctl
             let result = unsafe {
                 ioctl(
                     fd,
                     SEV_IOCTL_GET_TIME,
-                    &mut time as *mut u64 as *mut c_void
+                    &mut time as *mut SevTime as *mut c_void
                 )
             };
 
             if result == 0 {
-                println!("Successfully got time from SEV device: {}", time);
-                Ok(time)
+                println!("Successfully got time from SEV device: {} seconds, {} nanoseconds", 
+                    time.seconds, time.nanoseconds);
+                Ok(time.seconds)
             } else {
                 let err = io::Error::last_os_error();
                 println!("Failed to get time from SEV device: {}", err);
-                // Fallback to system time
-                Ok(SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .map_err(|e| ClockError::SystemTimeError(e))?
-                    .as_secs())
+                Err(ClockError::IoctlError(format!("Failed to get time from SEV device: {}", err)))
             }
         } else {
-            // Fallback to system time if SEV is not available
-            Ok(SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_err(|e| ClockError::SystemTimeError(e))?
-                .as_secs())
+            Err(ClockError::NotInitialized)
         }
     }
 
