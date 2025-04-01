@@ -4,6 +4,7 @@ use sev::firmware::host::Firmware;
 use std::path::PathBuf;
 use std::fs;
 use std::env;
+use std::io;
 
 #[derive(Debug, Error)]
 pub enum ClockError {
@@ -18,6 +19,9 @@ pub enum ClockError {
 
     #[error("SEV not available: {0}")]
     SevNotAvailable(String),
+
+    #[error("IO error: {0}")]
+    IoError(#[from] io::Error),
 }
 
 pub struct Clock {
@@ -43,7 +47,10 @@ impl Clock {
             let path_buf = PathBuf::from(path);
             println!("Checking {}: {}", path, if path_buf.exists() { "exists" } else { "does not exist" });
             if path_buf.exists() {
-                println!("  Permissions: {:?}", fs::metadata(path_buf).map(|m| m.permissions()));
+                let metadata = fs::metadata(path_buf)?;
+                println!("  Permissions: {:?}", metadata.permissions());
+                println!("  File type: {:?}", metadata.file_type());
+                println!("  Size: {} bytes", metadata.size());
             }
         }
 
@@ -52,6 +59,19 @@ impl Clock {
         println!("SEV_DEVICE: {:?}", env::var("SEV_DEVICE"));
         println!("SEV_GUEST_DEVICE: {:?}", env::var("SEV_GUEST_DEVICE"));
         println!("SEV_GUEST_PATH: {:?}", env::var("SEV_GUEST_PATH"));
+
+        // Try to access the device directly
+        println!("\nTrying to access /dev/sev-guest directly...");
+        match fs::File::open("/dev/sev-guest") {
+            Ok(file) => {
+                println!("Successfully opened /dev/sev-guest");
+                println!("File descriptor: {:?}", file);
+            }
+            Err(e) => {
+                println!("Failed to open /dev/sev-guest: {}", e);
+                println!("Error kind: {:?}", e.kind());
+            }
+        }
 
         // Try different approaches to initialize SEV
         println!("\nTrying to initialize SEV...");
@@ -66,6 +86,7 @@ impl Clock {
             }
             Err(e) => {
                 println!("First attempt failed: {}", e);
+                println!("Error type: {:?}", std::mem::discriminant(&e));
                 
                 // Second try: Try without environment variable
                 env::remove_var("SEV_DEVICE");
@@ -78,6 +99,7 @@ impl Clock {
                     Err(e) => {
                         let error_msg = e.to_string();
                         println!("SEV initialization error: {}", error_msg);
+                        println!("Error type: {:?}", std::mem::discriminant(&e));
                         if error_msg.contains("No such file or directory") {
                             println!("SEV device not found. Please check if SEV is properly configured.");
                             Err(ClockError::SevNotAvailable(format!("SEV firmware not available: {}", error_msg)))
