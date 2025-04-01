@@ -3,7 +3,7 @@ use thiserror::Error;
 use std::io;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::io::AsRawFd;
-use iocuddle::{Ioctl, Read};
+use iocuddle::{Ioctl, WriteRead};
 use std::fs::File;
 
 #[derive(Debug, Error)]
@@ -32,7 +32,7 @@ const SEV_IOCTL_BASE: u64 = 0xAE00;
 const SEV_IOCTL_GET_TIME: u64 = SEV_IOCTL_BASE + 1;
 
 // Define the ioctl command
-const SEV_GET_TIME: Ioctl<Read, &mut u64> = unsafe { Ioctl::classic(SEV_IOCTL_GET_TIME) };
+const SEV_GET_TIME: Ioctl<WriteRead, &mut u64> = unsafe { Ioctl::classic(SEV_IOCTL_GET_TIME) };
 
 pub struct Clock {
     sev_fd: Option<File>,
@@ -97,7 +97,7 @@ impl Clock {
             let mut time: u64 = 0;
             
             // Try to get time from SEV device
-            match unsafe { SEV_GET_TIME.read(fd, &mut time) } {
+            match unsafe { SEV_GET_TIME.ioctl(fd, &mut time) } {
                 Ok(_) => {
                     println!("Successfully got time from SEV device: {}", time);
                     Ok(time)
