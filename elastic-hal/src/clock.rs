@@ -97,7 +97,7 @@ impl Clock {
             let mut time: u64 = 0;
             
             // Try to get time from SEV device
-            match unsafe { SEV_GET_TIME.ioctl(fd, &mut time) } {
+            match unsafe { SEV_GET_TIME.read(fd, &mut time) } {
                 Ok(_) => {
                     println!("Successfully got time from SEV device: {}", time);
                     Ok(time)
