@@ -87,7 +87,7 @@ impl Clock {
             }
             Err(e) => {
                 println!("First attempt failed: {}", e);
-                println!("Error type: {:?}", std::mem::discriminant(&e));
+                println!("Error details: {:?}", e);
                 
                 // Second try: Try without environment variable
                 env::remove_var("SEV_DEVICE");
@@ -100,7 +100,7 @@ impl Clock {
                     Err(e) => {
                         let error_msg = e.to_string();
                         println!("SEV initialization error: {}", error_msg);
-                        println!("Error type: {:?}", std::mem::discriminant(&e));
+                        println!("Error details: {:?}", e);
                         if error_msg.contains("No such file or directory") {
                             println!("SEV device not found. Please check if SEV is properly configured.");
                             Err(ClockError::SevNotAvailable(format!("SEV firmware not available: {}", error_msg)))
