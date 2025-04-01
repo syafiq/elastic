@@ -6,6 +6,7 @@ use std::fs;
 use std::env;
 use std::io;
 use std::os::unix::fs::MetadataExt;
+use std::os::unix::io::AsRawFd;
 
 #[derive(Debug, Error)]
 pub enum ClockError {
@@ -80,16 +81,33 @@ impl Clock {
         println!("SEV_GUEST_DEVICE_PATH: {:?}", env::var("SEV_GUEST_DEVICE_PATH"));
         println!("SEV_GUEST_DEVICE_NUM: {:?}", env::var("SEV_GUEST_DEVICE_NUM"));
 
-        // Try to access the device directly
+        // Try to access the device directly with different methods
         println!("\nTrying to access /dev/sev-guest directly...");
+        
+        // Try read-only
         match fs::File::open("/dev/sev-guest") {
             Ok(file) => {
-                println!("Successfully opened /dev/sev-guest");
+                println!("Successfully opened /dev/sev-guest (read-only)");
                 println!("File descriptor: {:?}", file);
                 println!("File type: {:?}", file.metadata().map(|m| m.file_type()));
+                println!("Raw file descriptor: {}", file.as_raw_fd());
             }
             Err(e) => {
-                println!("Failed to open /dev/sev-guest: {}", e);
+                println!("Failed to open /dev/sev-guest (read-only): {}", e);
+                println!("Error kind: {:?}", e.kind());
+            }
+        }
+
+        // Try read-write
+        match fs::OpenOptions::new().read(true).write(true).open("/dev/sev-guest") {
+            Ok(file) => {
+                println!("Successfully opened /dev/sev-guest (read-write)");
+                println!("File descriptor: {:?}", file);
+                println!("File type: {:?}", file.metadata().map(|m| m.file_type()));
+                println!("Raw file descriptor: {}", file.as_raw_fd());
+            }
+            Err(e) => {
+                println!("Failed to open /dev/sev-guest (read-write): {}", e);
                 println!("Error kind: {:?}", e.kind());
             }
         }
