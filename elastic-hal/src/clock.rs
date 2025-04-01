@@ -29,13 +29,13 @@ pub enum ClockError {
 
 // SEV IOCTL commands
 const SEV_IOCTL_BASE: u64 = 0xAE00;
-const SEV_IOCTL_GET_CAPABILITIES: u64 = SEV_IOCTL_BASE + 0x01;
+const SEV_IOCTL_GET_STATUS: u64 = SEV_IOCTL_BASE + 0x00;
 
 #[repr(C)]
-struct SevCapabilities {
+struct SevStatus {
     major: u32,
     minor: u32,
-    build: u32,
+    state: u32,
     _reserved: u32,
 }
 
@@ -114,36 +114,36 @@ impl Clock {
     fn check_sev_environment(&self) -> Result<bool, ClockError> {
         if let Some(file) = &self.sev_fd {
             let fd = file.as_raw_fd();
-            let mut caps = SevCapabilities {
+            let mut status = SevStatus {
                 major: 0,
                 minor: 0,
-                build: 0,
+                state: 0,
                 _reserved: 0,
             };
             
             // Print diagnostic information about the ioctl command
             println!("\nAttempting SEV ioctl:");
-            println!("Command: 0x{:X}", SEV_IOCTL_GET_CAPABILITIES);
-            println!("Struct size: {} bytes", std::mem::size_of::<SevCapabilities>());
-            println!("Struct alignment: {} bytes", std::mem::align_of::<SevCapabilities>());
+            println!("Command: 0x{:X}", SEV_IOCTL_GET_STATUS);
+            println!("Struct size: {} bytes", std::mem::size_of::<SevStatus>());
+            println!("Struct alignment: {} bytes", std::mem::align_of::<SevStatus>());
             
-            // Try to get capabilities
+            // Try to get status
             let result = unsafe {
                 ioctl(
                     fd,
-                    SEV_IOCTL_GET_CAPABILITIES,
-                    &mut caps as *mut SevCapabilities as *mut c_void
+                    SEV_IOCTL_GET_STATUS,
+                    &mut status as *mut SevStatus as *mut c_void
                 )
             };
 
             if result == 0 {
-                println!("SEV Capabilities:");
-                println!("  Version: {}.{}", caps.major, caps.minor);
-                println!("  Build: {}", caps.build);
+                println!("SEV Status:");
+                println!("  Version: {}.{}", status.major, status.minor);
+                println!("  State: {}", status.state);
                 Ok(true)
             } else {
                 let err = io::Error::last_os_error();
-                println!("Failed to get SEV capabilities: {}", err);
+                println!("Failed to get SEV status: {}", err);
                 println!("Error code: {}", err.kind());
                 println!("Error message: {}", err.to_string());
                 Ok(false)
