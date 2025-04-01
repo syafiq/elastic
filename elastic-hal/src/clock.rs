@@ -3,6 +3,7 @@ use thiserror::Error;
 use sev::firmware::host::Firmware;
 use std::path::PathBuf;
 use std::fs;
+use std::env;
 
 #[derive(Debug, Error)]
 pub enum ClockError {
@@ -46,21 +47,44 @@ impl Clock {
             }
         }
 
-        // Try to open the SEV device
+        // Print environment information
+        println!("\nEnvironment information:");
+        println!("SEV_DEVICE: {:?}", env::var("SEV_DEVICE"));
+        println!("SEV_GUEST_DEVICE: {:?}", env::var("SEV_GUEST_DEVICE"));
+        println!("SEV_GUEST_PATH: {:?}", env::var("SEV_GUEST_PATH"));
+
+        // Try different approaches to initialize SEV
+        println!("\nTrying to initialize SEV...");
+        
+        // First try: Set environment variable and try
+        env::set_var("SEV_DEVICE", "/dev/sev-guest");
         match Firmware::open() {
             Ok(firmware) => {
                 self.firmware = Some(firmware);
-                println!("Successfully initialized SEV firmware");
+                println!("Successfully initialized SEV firmware using SEV_DEVICE");
                 Ok(())
             }
             Err(e) => {
-                let error_msg = e.to_string();
-                println!("SEV initialization error: {}", error_msg);
-                if error_msg.contains("No such file or directory") {
-                    println!("SEV device not found. Please check if SEV is properly configured.");
-                    Err(ClockError::SevNotAvailable(format!("SEV firmware not available: {}", error_msg)))
-                } else {
-                    Err(ClockError::FirmwareError(error_msg))
+                println!("First attempt failed: {}", e);
+                
+                // Second try: Try without environment variable
+                env::remove_var("SEV_DEVICE");
+                match Firmware::open() {
+                    Ok(firmware) => {
+                        self.firmware = Some(firmware);
+                        println!("Successfully initialized SEV firmware without environment variable");
+                        Ok(())
+                    }
+                    Err(e) => {
+                        let error_msg = e.to_string();
+                        println!("SEV initialization error: {}", error_msg);
+                        if error_msg.contains("No such file or directory") {
+                            println!("SEV device not found. Please check if SEV is properly configured.");
+                            Err(ClockError::SevNotAvailable(format!("SEV firmware not available: {}", error_msg)))
+                        } else {
+                            Err(ClockError::FirmwareError(error_msg))
+                        }
+                    }
                 }
             }
         }
