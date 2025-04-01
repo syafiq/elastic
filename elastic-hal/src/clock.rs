@@ -42,6 +42,21 @@ impl Clock {
             "/dev/sev",
             "/dev/sev/guest",
             "/dev/sev/guest/0",
+            "/dev/sev/guest/1",
+            "/dev/sev/guest/2",
+            "/dev/sev/guest/3",
+            "/dev/sev/guest/4",
+            "/dev/sev/guest/5",
+            "/dev/sev/guest/6",
+            "/dev/sev/guest/7",
+            "/dev/sev/guest/8",
+            "/dev/sev/guest/9",
+            "/dev/sev/guest/10",
+            "/dev/sev/guest/11",
+            "/dev/sev/guest/12",
+            "/dev/sev/guest/13",
+            "/dev/sev/guest/14",
+            "/dev/sev/guest/15",
         ];
 
         for path in &possible_paths {
@@ -52,6 +67,8 @@ impl Clock {
                 println!("  Permissions: {:?}", metadata.permissions());
                 println!("  File type: {:?}", metadata.file_type());
                 println!("  Size: {} bytes", metadata.size());
+                println!("  Device ID: {:?}", metadata.dev());
+                println!("  Inode: {:?}", metadata.ino());
             }
         }
 
@@ -60,6 +77,8 @@ impl Clock {
         println!("SEV_DEVICE: {:?}", env::var("SEV_DEVICE"));
         println!("SEV_GUEST_DEVICE: {:?}", env::var("SEV_GUEST_DEVICE"));
         println!("SEV_GUEST_PATH: {:?}", env::var("SEV_GUEST_PATH"));
+        println!("SEV_GUEST_DEVICE_PATH: {:?}", env::var("SEV_GUEST_DEVICE_PATH"));
+        println!("SEV_GUEST_DEVICE_NUM: {:?}", env::var("SEV_GUEST_DEVICE_NUM"));
 
         // Try to access the device directly
         println!("\nTrying to access /dev/sev-guest directly...");
@@ -67,6 +86,7 @@ impl Clock {
             Ok(file) => {
                 println!("Successfully opened /dev/sev-guest");
                 println!("File descriptor: {:?}", file);
+                println!("File type: {:?}", file.metadata().map(|m| m.file_type()));
             }
             Err(e) => {
                 println!("Failed to open /dev/sev-guest: {}", e);
