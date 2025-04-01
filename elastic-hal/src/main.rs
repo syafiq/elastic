@@ -1,6 +1,6 @@
 mod clock;
 
-use clock::{Clock, ClockError};
+use clock::Clock;
 use std::error::Error;
 
 #[tokio::main]
