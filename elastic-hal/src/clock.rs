@@ -34,8 +34,10 @@ impl Clock {
             }
             Err(e) => {
                 let error_msg = e.to_string();
+                println!("SEV initialization error: {}", error_msg);
                 if error_msg.contains("No such file or directory") {
-                    Err(ClockError::SevNotAvailable("SEV firmware not available in this environment".to_string()))
+                    println!("SEV device not found. Please check if SEV is properly configured.");
+                    Err(ClockError::SevNotAvailable(format!("SEV firmware not available: {}", error_msg)))
                 } else {
                     Err(ClockError::FirmwareError(error_msg))
                 }
