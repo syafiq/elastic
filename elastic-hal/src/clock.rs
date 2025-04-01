@@ -27,6 +27,9 @@ impl Clock {
     }
 
     pub fn init(&mut self) -> Result<(), ClockError> {
+        // Set the SEV device path environment variable
+        std::env::set_var("SEV_DEVICE", "/dev/sev-guest");
+        
         match Firmware::open() {
             Ok(firmware) => {
                 self.firmware = Some(firmware);
