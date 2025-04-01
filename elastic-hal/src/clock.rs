@@ -5,6 +5,7 @@ use std::os::unix::fs::MetadataExt;
 use std::os::unix::io::AsRawFd;
 use std::fs::File;
 use libc::{ioctl, c_void};
+use iocuddle::{Group, Ioctl, WriteRead};
 
 #[derive(Debug, Error)]
 pub enum ClockError {
@@ -28,8 +29,8 @@ pub enum ClockError {
 }
 
 // SEV IOCTL commands
-const SEV_IOCTL_BASE: u64 = 0xAE00;
-const SEV_IOCTL_GET_STATUS: u64 = (0xAE00 << 16) | (0x01 << 8) | 0x00;  // _IOR(0xAE00, 0x01, struct sev_status)
+const SEV: Group = Group::new(0xAE);
+const SEV_GET_STATUS: Ioctl<WriteRead, &SevStatus> = unsafe { SEV.write_read(0x01) };
 
 #[repr(C)]
 struct SevStatus {
@@ -123,30 +124,24 @@ impl Clock {
             
             // Print diagnostic information about the ioctl command
             println!("\nAttempting SEV ioctl:");
-            println!("Command: 0x{:X}", SEV_IOCTL_GET_STATUS);
+            println!("Command: 0x{:X}", SEV_GET_STATUS.0);
             println!("Struct size: {} bytes", std::mem::size_of::<SevStatus>());
             println!("Struct alignment: {} bytes", std::mem::align_of::<SevStatus>());
             
             // Try to get status
-            let result = unsafe {
-                ioctl(
-                    fd,
-                    SEV_IOCTL_GET_STATUS,
-                    &mut status as *mut SevStatus as *mut c_void
-                )
-            };
-
-            if result == 0 {
-                println!("SEV Status:");
-                println!("  Version: {}.{}", status.major, status.minor);
-                println!("  State: {}", status.state);
-                Ok(true)
-            } else {
-                let err = io::Error::last_os_error();
-                println!("Failed to get SEV status: {}", err);
-                println!("Error code: {}", err.kind());
-                println!("Error message: {}", err.to_string());
-                Ok(false)
+            match SEV_GET_STATUS.ioctl(fd, &mut status) {
+                Ok(_) => {
+                    println!("SEV Status:");
+                    println!("  Version: {}.{}", status.major, status.minor);
+                    println!("  State: {}", status.state);
+                    Ok(true)
+                }
+                Err(err) => {
+                    println!("Failed to get SEV status: {}", err);
+                    println!("Error code: {}", err.kind());
+                    println!("Error message: {}", err.to_string());
+                    Ok(false)
+                }
             }
         } else {
             Ok(false)
