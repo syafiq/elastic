@@ -6,6 +6,7 @@ use std::env;
 use std::io;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::io::{AsRawFd, RawFd};
+use iocuddle::{Ioctl, IoctlResult};
 
 #[derive(Debug, Error)]
 pub enum ClockError {
@@ -23,7 +24,14 @@ pub enum ClockError {
 
     #[error("IO error: {0}")]
     IoError(#[from] io::Error),
+
+    #[error("IOCTL error: {0}")]
+    IoctlError(String),
 }
+
+// SEV IOCTL commands
+const SEV_IOCTL_BASE: u32 = 0xAE00;
+const SEV_IOCTL_GET_TIME: u32 = SEV_IOCTL_BASE + 1;
 
 pub struct Clock {
     sev_fd: Option<RawFd>,
@@ -93,6 +101,17 @@ impl Clock {
                 println!("File type: {:?}", file.metadata().map(|m| m.file_type()));
                 let fd = file.as_raw_fd();
                 println!("Raw file descriptor: {}", fd);
+
+                // Try to get SEV time using ioctl
+                unsafe {
+                    let mut time: u64 = 0;
+                    let result = ioctl(fd, SEV_IOCTL_GET_TIME, &mut time);
+                    match result {
+                        Ok(_) => println!("Successfully got SEV time: {}", time),
+                        Err(e) => println!("Failed to get SEV time: {}", e),
+                    }
+                }
+
                 self.sev_fd = Some(fd);
                 Ok(())
             }
