@@ -5,7 +5,7 @@ use std::os::unix::fs::MetadataExt;
 use std::os::unix::io::AsRawFd;
 use std::fs::File;
 use libc::{ioctl, c_void};
-use iocuddle::{Group, Ioctl, WriteRead};
+use iocuddle::{Group, Ioctl, WriteRead, Read};
 
 #[derive(Debug, Error)]
 pub enum ClockError {
@@ -30,9 +30,10 @@ pub enum ClockError {
 
 // SEV IOCTL commands
 const SEV: Group = Group::new(0xAE);
-const SEV_GET_STATUS: Ioctl<WriteRead, &SevStatus> = unsafe { SEV.write_read(0x01) };
+const SEV_GET_STATUS: Ioctl<Read, SevStatus> = unsafe { SEV.read(0x01) };
 
 #[repr(C)]
+#[derive(Debug, Default)]
 struct SevStatus {
     major: u32,
     minor: u32,
@@ -114,12 +115,7 @@ impl Clock {
 
     fn check_sev_environment(&self) -> Result<bool, ClockError> {
         if let Some(file) = &self.sev_fd {
-            let mut status = SevStatus {
-                major: 0,
-                minor: 0,
-                state: 0,
-                _reserved: 0,
-            };
+            let mut status = SevStatus::default();
             
             // Print diagnostic information about the ioctl command
             println!("\nAttempting SEV ioctl:");
@@ -127,9 +123,8 @@ impl Clock {
             println!("Struct alignment: {} bytes", std::mem::align_of::<SevStatus>());
             
             // Try to get status
-            let mut file = File::options().read(true).write(true).open("/dev/sev-guest")?;
-            match SEV_GET_STATUS.ioctl(&mut file, &mut status) {
-                Ok(_) => {
+            match SEV_GET_STATUS.ioctl(file) {
+                Ok((_, status)) => {
                     println!("SEV Status:");
                     println!("  Version: {}.{}", status.major, status.minor);
                     println!("  State: {}", status.state);
