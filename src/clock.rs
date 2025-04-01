@@ -24,7 +24,7 @@ struct SnpReportResp {
 // SEV IOCTL commands
 const SNP_GUEST_REQ_IOC_TYPE: u8 = b'S';
 const SNP_GET_REPORT: Ioctl<WriteRead, &SnpGuestRequestIoctl> = unsafe { 
-    Ioctl::write_read((SNP_GUEST_REQ_IOC_TYPE as u32) << 8 | 0x0)
+    Ioctl::write_read((SNP_GUEST_REQ_IOC_TYPE as u32) << 8 | 0x0, std::mem::size_of::<SnpGuestRequestIoctl>() as u32)
 };
 
 pub fn init(&mut self) -> Result<(), ClockError> {
@@ -115,6 +115,7 @@ fn check_sev_environment(&self) -> Result<bool, ClockError> {
             Ok(_) => {
                 println!("Successfully got SNP report");
                 println!("Response data length: {} bytes", resp.data.len());
+                println!("Exit info 2: 0x{:x}", ioctl_req.exitinfo2);
                 Ok(true)
             }
             Err(err) => {
