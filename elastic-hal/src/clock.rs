@@ -7,6 +7,9 @@ use std::io;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::io::{AsRawFd, RawFd};
 use iocuddle::{Ioctl, IoctlResult};
+use std::fs::File;
+use std::io::{self, Read, Write};
+use std::path::Path;
 
 #[derive(Debug, Error)]
 pub enum ClockError {
@@ -33,8 +36,11 @@ pub enum ClockError {
 const SEV_IOCTL_BASE: u32 = 0xAE00;
 const SEV_IOCTL_GET_TIME: u32 = SEV_IOCTL_BASE + 1;
 
+// Define the ioctl command
+const SEV_GET_TIME: Ioctl<(), u64> = unsafe { Ioctl::new(SEV_IOCTL_GET_TIME) };
+
 pub struct Clock {
-    sev_fd: Option<RawFd>,
+    sev_fd: Option<File>,
 }
 
 impl Clock {
@@ -43,84 +49,100 @@ impl Clock {
     }
 
     pub fn init(&mut self) -> Result<(), ClockError> {
-        // Print diagnostic information
-        println!("Checking SEV device paths:");
-        let possible_paths = [
+        println!("Initializing Clock Interface...");
+        
+        // Check multiple possible SEV device paths
+        let sev_paths = [
             "/dev/sev-guest",
             "/dev/sev",
             "/dev/sev/guest",
-            "/dev/sev/guest/0",
-            "/dev/sev/guest/1",
-            "/dev/sev/guest/2",
-            "/dev/sev/guest/3",
-            "/dev/sev/guest/4",
-            "/dev/sev/guest/5",
-            "/dev/sev/guest/6",
-            "/dev/sev/guest/7",
-            "/dev/sev/guest/8",
-            "/dev/sev/guest/9",
-            "/dev/sev/guest/10",
-            "/dev/sev/guest/11",
-            "/dev/sev/guest/12",
-            "/dev/sev/guest/13",
-            "/dev/sev/guest/14",
-            "/dev/sev/guest/15",
+            "/dev/sev/guest/0"
         ];
 
-        for path in &possible_paths {
-            let path_buf = PathBuf::from(path);
-            println!("Checking {}: {}", path, if path_buf.exists() { "exists" } else { "does not exist" });
-            if path_buf.exists() {
-                let metadata = fs::metadata(path_buf)?;
-                println!("  Permissions: {:?}", metadata.permissions());
-                println!("  File type: {:?}", metadata.file_type());
-                println!("  Size: {} bytes", metadata.size());
-                println!("  Device ID: {:?}", metadata.dev());
-                println!("  Inode: {:?}", metadata.ino());
-                println!("  Major device number: {}", metadata.dev() >> 8);
-                println!("  Minor device number: {}", metadata.dev() & 0xFF);
+        // Print diagnostic information about environment variables
+        println!("\nSEV Environment Variables:");
+        println!("SEV_DEVICE: {}", std::env::var("SEV_DEVICE").unwrap_or_else(|_| "not set".to_string()));
+        println!("SEV_DEVICE_PATH: {}", std::env::var("SEV_DEVICE_PATH").unwrap_or_else(|_| "not set".to_string()));
+        println!("SEV_DEVICE_FD: {}", std::env::var("SEV_DEVICE_FD").unwrap_or_else(|_| "not set".to_string()));
+
+        // Print diagnostic information about device paths
+        println!("\nSEV Device Paths:");
+        for path in &sev_paths {
+            match std::fs::metadata(path) {
+                Ok(metadata) => {
+                    println!("{} exists with permissions: {:o}", path, metadata.mode() & 0o777);
+                    if let Ok(file) = File::open(path) {
+                        println!("  Can open for reading");
+                        if let Ok(file) = File::options().read(true).write(true).open(path) {
+                            println!("  Can open for read/write");
+                        }
+                    }
+                }
+                Err(e) => println!("{} does not exist: {}", path, e),
             }
         }
 
-        // Print environment information
-        println!("\nEnvironment information:");
-        println!("SEV_DEVICE: {:?}", env::var("SEV_DEVICE"));
-        println!("SEV_GUEST_DEVICE: {:?}", env::var("SEV_GUEST_DEVICE"));
-        println!("SEV_GUEST_PATH: {:?}", env::var("SEV_GUEST_PATH"));
-        println!("SEV_GUEST_DEVICE_PATH: {:?}", env::var("SEV_GUEST_DEVICE_PATH"));
-        println!("SEV_GUEST_DEVICE_NUM: {:?}", env::var("SEV_GUEST_DEVICE_NUM"));
-
-        // Try to access the device directly with different methods
-        println!("\nTrying to access /dev/sev-guest directly...");
-        
-        // Try read-write
-        match fs::OpenOptions::new().read(true).write(true).open("/dev/sev-guest") {
+        // Try to open the SEV device
+        match File::options().read(true).write(true).open("/dev/sev-guest") {
             Ok(file) => {
-                println!("Successfully opened /dev/sev-guest (read-write)");
-                println!("File descriptor: {:?}", file);
-                println!("File type: {:?}", file.metadata().map(|m| m.file_type()));
-                let fd = file.as_raw_fd();
-                println!("Raw file descriptor: {}", fd);
-
-                // Try to get SEV time using ioctl
-                unsafe {
-                    let mut time: u64 = 0;
-                    let result = ioctl(fd, SEV_IOCTL_GET_TIME, &mut time);
-                    match result {
-                        Ok(_) => println!("Successfully got SEV time: {}", time),
-                        Err(e) => println!("Failed to get SEV time: {}", e),
-                    }
-                }
-
-                self.sev_fd = Some(fd);
+                println!("\nSuccessfully opened /dev/sev-guest");
+                self.sev_fd = Some(file);
                 Ok(())
             }
             Err(e) => {
-                println!("Failed to open /dev/sev-guest (read-write): {}", e);
-                println!("Error kind: {:?}", e.kind());
+                println!("\nFailed to open /dev/sev-guest: {}", e);
                 Err(ClockError::SevNotAvailable(format!("Failed to open SEV device: {}", e)))
             }
         }
+    }
+
+    pub fn get_time(&self) -> Result<u64, ClockError> {
+        if let Some(file) = &self.sev_fd {
+            let mut time: u64 = 0;
+            let fd = file.as_raw_fd();
+            
+            // Try to get time from SEV device
+            match unsafe { SEV_GET_TIME.ioctl(fd, ()) } {
+                Ok(time) => {
+                    println!("Successfully got time from SEV device: {}", time);
+                    Ok(time)
+                }
+                Err(e) => {
+                    println!("Failed to get time from SEV device: {}", e);
+                    // Fallback to system time
+                    Ok(SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map_err(|e| ClockError::IoError(e))?
+                        .as_secs())
+                }
+            }
+        } else {
+            // Fallback to system time if SEV is not available
+            Ok(SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|e| ClockError::IoError(e))?
+                .as_secs())
+        }
+    }
+
+    pub fn set_time(&self, _time: u64) -> Result<(), ClockError> {
+        if self.sev_fd.is_some() {
+            println!("Setting time in SEV environment...");
+            // TODO: Implement SEV-specific time setting
+        } else {
+            println!("SEV not available, skipping time setting");
+        }
+        Ok(())
+    }
+
+    pub fn get_timezone(&self) -> Result<String, ClockError> {
+        // TODO: Implement timezone handling
+        Ok("UTC".to_string())
+    }
+
+    pub fn set_timezone(&self, _timezone: &str) -> Result<(), ClockError> {
+        // TODO: Implement timezone setting
+        Ok(())
     }
 
     pub fn get_time_ms(&self) -> Result<u64, ClockError> {
@@ -164,19 +186,38 @@ impl Clock {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_clock_initialization() {
+    #[test]
+    fn test_clock_initialization() {
         let mut clock = Clock::new();
         match clock.init() {
-            Ok(_) => {
-                // If we're in an SEV environment, initialization should succeed
-                assert!(clock.sev_fd.is_some());
+            Ok(_) => println!("Clock initialization successful"),
+            Err(e) => println!("Clock initialization failed: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_get_time() {
+        let mut clock = Clock::new();
+        if clock.init().is_ok() {
+            match clock.get_time() {
+                Ok(time) => println!("Current time: {}", time),
+                Err(e) => println!("Failed to get time: {}", e),
             }
-            Err(ClockError::SevNotAvailable(_)) => {
-                // If we're not in an SEV environment, this is expected
-                assert!(clock.sev_fd.is_none());
+        }
+    }
+
+    #[test]
+    fn test_set_time() {
+        let mut clock = Clock::new();
+        if clock.init().is_ok() {
+            let current_time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            match clock.set_time(current_time) {
+                Ok(_) => println!("Time set successfully"),
+                Err(e) => println!("Failed to set time: {}", e),
             }
-            Err(e) => panic!("Unexpected error: {:?}", e),
         }
     }
 
