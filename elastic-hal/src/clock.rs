@@ -115,16 +115,14 @@ impl Clock {
 
     fn check_sev_environment(&self) -> Result<bool, ClockError> {
         if let Some(file) = &self.sev_fd {
-            let mut status = SevStatus::default();
-            
             // Print diagnostic information about the ioctl command
             println!("\nAttempting SEV ioctl:");
             println!("Struct size: {} bytes", std::mem::size_of::<SevStatus>());
             println!("Struct alignment: {} bytes", std::mem::align_of::<SevStatus>());
             
             // Try to get status
-            match SEV_GET_STATUS.ioctl(file, &mut status) {
-                Ok(_) => {
+            match SEV_GET_STATUS.ioctl(file) {
+                Ok((_, status)) => {
                     println!("SEV Status:");
                     println!("  Version: {}.{}", status.major, status.minor);
                     println!("  State: {}", status.state);
