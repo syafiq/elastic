@@ -70,6 +70,32 @@ impl Clock {
                 println!("  Size: {} bytes", metadata.size());
                 println!("  Device ID: {:?}", metadata.dev());
                 println!("  Inode: {:?}", metadata.ino());
+                println!("  Major device number: {}", metadata.dev() >> 8);
+                println!("  Minor device number: {}", metadata.dev() & 0xFF);
+            }
+        }
+
+        // Check for any SEV-related devices in /dev
+        println!("\nChecking for SEV-related devices in /dev:");
+        if let Ok(entries) = fs::read_dir("/dev") {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let path = entry.path();
+                    if let Some(file_name) = path.file_name() {
+                        if let Some(name) = file_name.to_str() {
+                            if name.contains("sev") {
+                                println!("Found SEV-related device: {}", path.display());
+                                if let Ok(metadata) = fs::metadata(&path) {
+                                    println!("  Permissions: {:?}", metadata.permissions());
+                                    println!("  File type: {:?}", metadata.file_type());
+                                    println!("  Device ID: {:?}", metadata.dev());
+                                    println!("  Major device number: {}", metadata.dev() >> 8);
+                                    println!("  Minor device number: {}", metadata.dev() & 0xFF);
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
