@@ -1,12 +1,11 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
-use sev::firmware::host::Firmware;
 use std::path::PathBuf;
 use std::fs;
 use std::env;
 use std::io;
 use std::os::unix::fs::MetadataExt;
-use std::os::unix::io::AsRawFd;
+use std::os::unix::io::{AsRawFd, RawFd};
 
 #[derive(Debug, Error)]
 pub enum ClockError {
@@ -27,12 +26,12 @@ pub enum ClockError {
 }
 
 pub struct Clock {
-    firmware: Option<Firmware>,
+    sev_fd: Option<RawFd>,
 }
 
 impl Clock {
     pub fn new() -> Self {
-        Self { firmware: None }
+        Self { sev_fd: None }
     }
 
     pub fn init(&mut self) -> Result<(), ClockError> {
@@ -86,75 +85,27 @@ impl Clock {
         // Try to access the device directly with different methods
         println!("\nTrying to access /dev/sev-guest directly...");
         
-        // Try read-only
-        match fs::File::open("/dev/sev-guest") {
-            Ok(file) => {
-                println!("Successfully opened /dev/sev-guest (read-only)");
-                println!("File descriptor: {:?}", file);
-                println!("File type: {:?}", file.metadata().map(|m| m.file_type()));
-                println!("Raw file descriptor: {}", file.as_raw_fd());
-            }
-            Err(e) => {
-                println!("Failed to open /dev/sev-guest (read-only): {}", e);
-                println!("Error kind: {:?}", e.kind());
-            }
-        }
-
         // Try read-write
         match fs::OpenOptions::new().read(true).write(true).open("/dev/sev-guest") {
             Ok(file) => {
                 println!("Successfully opened /dev/sev-guest (read-write)");
                 println!("File descriptor: {:?}", file);
                 println!("File type: {:?}", file.metadata().map(|m| m.file_type()));
-                println!("Raw file descriptor: {}", file.as_raw_fd());
+                let fd = file.as_raw_fd();
+                println!("Raw file descriptor: {}", fd);
+                self.sev_fd = Some(fd);
+                Ok(())
             }
             Err(e) => {
                 println!("Failed to open /dev/sev-guest (read-write): {}", e);
                 println!("Error kind: {:?}", e.kind());
-            }
-        }
-
-        // Try different approaches to initialize SEV
-        println!("\nTrying to initialize SEV...");
-        
-        // First try: Set environment variable and try
-        env::set_var("SEV_DEVICE", "/dev/sev-guest");
-        match Firmware::open() {
-            Ok(firmware) => {
-                self.firmware = Some(firmware);
-                println!("Successfully initialized SEV firmware using SEV_DEVICE");
-                Ok(())
-            }
-            Err(e) => {
-                println!("First attempt failed: {}", e);
-                println!("Error details: {:?}", e);
-                
-                // Second try: Try without environment variable
-                env::remove_var("SEV_DEVICE");
-                match Firmware::open() {
-                    Ok(firmware) => {
-                        self.firmware = Some(firmware);
-                        println!("Successfully initialized SEV firmware without environment variable");
-                        Ok(())
-                    }
-                    Err(e) => {
-                        let error_msg = e.to_string();
-                        println!("SEV initialization error: {}", error_msg);
-                        println!("Error details: {:?}", e);
-                        if error_msg.contains("No such file or directory") {
-                            println!("SEV device not found. Please check if SEV is properly configured.");
-                            Err(ClockError::SevNotAvailable(format!("SEV firmware not available: {}", error_msg)))
-                        } else {
-                            Err(ClockError::FirmwareError(error_msg))
-                        }
-                    }
-                }
+                Err(ClockError::SevNotAvailable(format!("Failed to open SEV device: {}", e)))
             }
         }
     }
 
     pub fn get_time_ms(&self) -> Result<u64, ClockError> {
-        if self.firmware.is_none() {
+        if self.sev_fd.is_none() {
             return Err(ClockError::NotInitialized);
         }
 
@@ -163,7 +114,7 @@ impl Clock {
     }
 
     pub fn get_time_us(&self) -> Result<u64, ClockError> {
-        if self.firmware.is_none() {
+        if self.sev_fd.is_none() {
             return Err(ClockError::NotInitialized);
         }
 
@@ -172,7 +123,7 @@ impl Clock {
     }
 
     pub async fn sleep_ms(&self, ms: u32) -> Result<(), ClockError> {
-        if self.firmware.is_none() {
+        if self.sev_fd.is_none() {
             return Err(ClockError::NotInitialized);
         }
 
@@ -181,7 +132,7 @@ impl Clock {
     }
 
     pub async fn sleep_us(&self, us: u32) -> Result<(), ClockError> {
-        if self.firmware.is_none() {
+        if self.sev_fd.is_none() {
             return Err(ClockError::NotInitialized);
         }
 
@@ -200,11 +151,11 @@ mod tests {
         match clock.init() {
             Ok(_) => {
                 // If we're in an SEV environment, initialization should succeed
-                assert!(clock.firmware.is_some());
+                assert!(clock.sev_fd.is_some());
             }
             Err(ClockError::SevNotAvailable(_)) => {
                 // If we're not in an SEV environment, this is expected
-                assert!(clock.firmware.is_none());
+                assert!(clock.sev_fd.is_none());
             }
             Err(e) => panic!("Unexpected error: {:?}", e),
         }
