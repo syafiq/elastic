@@ -29,21 +29,29 @@ pub enum ClockError {
 
 // SEV IOCTL commands
 const SEV_IOCTL_BASE: u64 = 0xAE00;
-const SEV_IOCTL_GET_TIME: u64 = SEV_IOCTL_BASE + 0x0A;
+const SEV_IOCTL_PLATFORM_STATUS: u64 = SEV_IOCTL_BASE + 0x04;
 
 #[repr(C)]
-struct SevTime {
-    seconds: u64,
-    nanoseconds: u32,
+struct SevPlatformStatus {
+    major: u32,
+    minor: u32,
+    state: u32,
+    config: u32,
+    build: u32,
+    guest_count: u32,
 }
 
 pub struct Clock {
     sev_fd: Option<File>,
+    is_sev: bool,
 }
 
 impl Clock {
     pub fn new() -> Self {
-        Self { sev_fd: None }
+        Self { 
+            sev_fd: None,
+            is_sev: false,
+        }
     }
 
     pub fn init(&mut self) -> Result<(), ClockError> {
@@ -85,74 +93,71 @@ impl Clock {
             Ok(file) => {
                 println!("\nSuccessfully opened /dev/sev-guest");
                 self.sev_fd = Some(file);
+                
+                // Check if we're in an SEV environment
+                if let Ok(true) = self.check_sev_environment() {
+                    println!("Running in SEV environment");
+                    self.is_sev = true;
+                } else {
+                    println!("Not running in SEV environment");
+                    self.is_sev = false;
+                }
+                
                 Ok(())
             }
             Err(e) => {
                 println!("\nFailed to open /dev/sev-guest: {}", e);
+                self.is_sev = false;
                 Err(ClockError::SevNotAvailable(format!("Failed to open SEV device: {}", e)))
             }
         }
     }
 
-    pub fn get_time(&self) -> Result<u64, ClockError> {
+    fn check_sev_environment(&self) -> Result<bool, ClockError> {
         if let Some(file) = &self.sev_fd {
             let fd = file.as_raw_fd();
-            let mut time = SevTime {
-                seconds: 0,
-                nanoseconds: 0,
+            let mut status = SevPlatformStatus {
+                major: 0,
+                minor: 0,
+                state: 0,
+                config: 0,
+                build: 0,
+                guest_count: 0,
             };
             
-            // Print diagnostic information about the ioctl command
-            println!("\nAttempting SEV ioctl:");
-            println!("Command: 0x{:X}", SEV_IOCTL_GET_TIME);
-            println!("Struct size: {} bytes", std::mem::size_of::<SevTime>());
-            println!("Struct alignment: {} bytes", std::mem::align_of::<SevTime>());
-            
-            // Try to get time from SEV device using direct ioctl
+            // Try to get platform status
             let result = unsafe {
                 ioctl(
                     fd,
-                    SEV_IOCTL_GET_TIME,
-                    &mut time as *mut SevTime as *mut c_void
+                    SEV_IOCTL_PLATFORM_STATUS,
+                    &mut status as *mut SevPlatformStatus as *mut c_void
                 )
             };
 
             if result == 0 {
-                println!("Successfully got time from SEV device: {} seconds, {} nanoseconds", 
-                    time.seconds, time.nanoseconds);
-                Ok(time.seconds)
+                println!("SEV Platform Status:");
+                println!("  Version: {}.{}", status.major, status.minor);
+                println!("  State: {}", status.state);
+                println!("  Config: {}", status.config);
+                println!("  Build: {}", status.build);
+                println!("  Guest Count: {}", status.guest_count);
+                Ok(true)
             } else {
                 let err = io::Error::last_os_error();
-                println!("Failed to get time from SEV device: {}", err);
-                println!("Error code: {}", err.kind());
-                println!("Error message: {}", err.to_string());
-                // For now, fall back to system time
-                let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
-                Ok(now.as_secs())
+                println!("Failed to get SEV platform status: {}", err);
+                Ok(false)
             }
         } else {
-            Err(ClockError::NotInitialized)
+            Ok(false)
         }
     }
 
-    pub fn set_time(&self, _time: u64) -> Result<(), ClockError> {
-        if self.sev_fd.is_some() {
-            println!("Setting time in SEV environment...");
-            // TODO: Implement SEV-specific time setting
-        } else {
-            println!("SEV not available, skipping time setting");
-        }
-        Ok(())
-    }
-
-    pub fn get_timezone(&self) -> Result<String, ClockError> {
-        // TODO: Implement timezone handling
-        Ok("UTC".to_string())
-    }
-
-    pub fn set_timezone(&self, _timezone: &str) -> Result<(), ClockError> {
-        // TODO: Implement timezone setting
-        Ok(())
+    pub fn get_time(&self) -> Result<u64, ClockError> {
+        // For now, always use system time
+        Ok(SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| ClockError::SystemTimeError(e))?
+            .as_secs())
     }
 
     pub fn get_time_ms(&self) -> Result<u64, ClockError> {
@@ -160,15 +165,8 @@ impl Clock {
             return Err(ClockError::NotInitialized);
         }
 
-        // Try to get time from SEV device first
-        match self.get_time() {
-            Ok(time) => Ok(time * 1000), // Convert seconds to milliseconds
-            Err(e) => {
-                println!("Falling back to system time: {}", e);
-                let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
-                Ok(now.as_millis() as u64)
-            }
-        }
+        let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
+        Ok(now.as_millis() as u64)
     }
 
     pub fn get_time_us(&self) -> Result<u64, ClockError> {
@@ -176,15 +174,8 @@ impl Clock {
             return Err(ClockError::NotInitialized);
         }
 
-        // Try to get time from SEV device first
-        match self.get_time() {
-            Ok(time) => Ok(time * 1_000_000), // Convert seconds to microseconds
-            Err(e) => {
-                println!("Falling back to system time: {}", e);
-                let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
-                Ok(now.as_micros() as u64)
-            }
-        }
+        let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
+        Ok(now.as_micros() as u64)
     }
 
     pub async fn sleep_ms(&self, ms: u32) -> Result<(), ClockError> {
@@ -298,4 +289,5 @@ mod tests {
             Err(e) => Err(e),
         }
     }
+} 
 } 
