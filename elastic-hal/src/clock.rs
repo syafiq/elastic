@@ -1,7 +1,6 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
-use sev::firmware::host::Firmware;
-use sev::firmware::Error as SevError;
+use sev::firmware::host::{Firmware, Error as SevError};
 
 #[derive(Debug, Error)]
 pub enum ClockError {
