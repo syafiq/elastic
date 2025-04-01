@@ -3,7 +3,7 @@ use thiserror::Error;
 use std::io;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::io::AsRawFd;
-use iocuddle::Ioctl;
+use iocuddle::{Ioctl, Read};
 use std::fs::File;
 
 #[derive(Debug, Error)]
@@ -28,11 +28,11 @@ pub enum ClockError {
 }
 
 // SEV IOCTL commands
-const SEV_IOCTL_BASE: u32 = 0xAE00;
-const SEV_IOCTL_GET_TIME: u32 = SEV_IOCTL_BASE + 1;
+const SEV_IOCTL_BASE: u64 = 0xAE00;
+const SEV_IOCTL_GET_TIME: u64 = SEV_IOCTL_BASE + 1;
 
 // Define the ioctl command
-const SEV_GET_TIME: Ioctl<iocuddle::Read, u64> = unsafe { Ioctl::classic(SEV_IOCTL_GET_TIME) };
+const SEV_GET_TIME: Ioctl<Read, u64> = unsafe { Ioctl::classic(SEV_IOCTL_GET_TIME) };
 
 pub struct Clock {
     sev_fd: Option<File>,
@@ -93,11 +93,10 @@ impl Clock {
 
     pub fn get_time(&self) -> Result<u64, ClockError> {
         if let Some(file) = &self.sev_fd {
-            let mut time: u64 = 0;
             let fd = file.as_raw_fd();
             
             // Try to get time from SEV device
-            match unsafe { SEV_GET_TIME.read(fd) } {
+            match unsafe { SEV_GET_TIME.ioctl(fd) } {
                 Ok(time) => {
                     println!("Successfully got time from SEV device: {}", time);
                     Ok(time)
