@@ -29,7 +29,7 @@ pub enum ClockError {
 
 // SEV IOCTL commands
 const SEV_IOCTL_BASE: u64 = 0xAE00;
-const SEV_IOCTL_GET_STATUS: u64 = SEV_IOCTL_BASE + 0x00;
+const SEV_IOCTL_GET_STATUS: u64 = (0xAE00 << 16) | (0x01 << 8) | 0x00;  // _IOR(0xAE00, 0x01, struct sev_status)
 
 #[repr(C)]
 struct SevStatus {
