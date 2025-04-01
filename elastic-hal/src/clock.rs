@@ -3,8 +3,8 @@ use thiserror::Error;
 use std::io;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::io::AsRawFd;
-use iocuddle::{Ioctl, WriteRead};
 use std::fs::File;
+use libc::{ioctl, c_void};
 
 #[derive(Debug, Error)]
 pub enum ClockError {
@@ -30,9 +30,6 @@ pub enum ClockError {
 // SEV IOCTL commands
 const SEV_IOCTL_BASE: u64 = 0xAE00;
 const SEV_IOCTL_GET_TIME: u64 = SEV_IOCTL_BASE + 1;
-
-// Define the ioctl command
-const SEV_GET_TIME: Ioctl<WriteRead, &mut u64> = unsafe { Ioctl::classic(SEV_IOCTL_GET_TIME) };
 
 pub struct Clock {
     sev_fd: Option<File>,
@@ -96,20 +93,26 @@ impl Clock {
             let fd = file.as_raw_fd();
             let mut time: u64 = 0;
             
-            // Try to get time from SEV device
-            match unsafe { SEV_GET_TIME.read(fd, &mut time) } {
-                Ok(_) => {
-                    println!("Successfully got time from SEV device: {}", time);
-                    Ok(time)
-                }
-                Err(e) => {
-                    println!("Failed to get time from SEV device: {}", e);
-                    // Fallback to system time
-                    Ok(SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .map_err(|e| ClockError::SystemTimeError(e))?
-                        .as_secs())
-                }
+            // Try to get time from SEV device using direct ioctl
+            let result = unsafe {
+                ioctl(
+                    fd,
+                    SEV_IOCTL_GET_TIME,
+                    &mut time as *mut u64 as *mut c_void
+                )
+            };
+
+            if result == 0 {
+                println!("Successfully got time from SEV device: {}", time);
+                Ok(time)
+            } else {
+                let err = io::Error::last_os_error();
+                println!("Failed to get time from SEV device: {}", err);
+                // Fallback to system time
+                Ok(SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(|e| ClockError::SystemTimeError(e))?
+                    .as_secs())
             }
         } else {
             // Fallback to system time if SEV is not available
