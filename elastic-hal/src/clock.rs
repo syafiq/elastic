@@ -102,6 +102,12 @@ impl Clock {
                 nanoseconds: 0,
             };
             
+            // Print diagnostic information about the ioctl command
+            println!("\nAttempting SEV ioctl:");
+            println!("Command: 0x{:X}", SEV_IOCTL_GET_TIME);
+            println!("Struct size: {} bytes", std::mem::size_of::<SevTime>());
+            println!("Struct alignment: {} bytes", std::mem::align_of::<SevTime>());
+            
             // Try to get time from SEV device using direct ioctl
             let result = unsafe {
                 ioctl(
@@ -118,6 +124,8 @@ impl Clock {
             } else {
                 let err = io::Error::last_os_error();
                 println!("Failed to get time from SEV device: {}", err);
+                println!("Error code: {}", err.kind());
+                println!("Error message: {}", err.to_string());
                 // For now, fall back to system time
                 let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
                 Ok(now.as_secs())
