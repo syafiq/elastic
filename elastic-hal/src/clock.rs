@@ -30,7 +30,7 @@ pub enum ClockError {
 
 // SEV IOCTL commands
 const SEV: Group = Group::new(0xAE);
-const SEV_GET_STATUS: Ioctl<Read, SevStatus> = unsafe { SEV.read(0x01) };
+const SEV_GET_STATUS: Ioctl<Read, &SevStatus> = unsafe { SEV.read(0x01) };
 
 #[repr(C)]
 #[derive(Debug, Default)]
@@ -123,8 +123,8 @@ impl Clock {
             println!("Struct alignment: {} bytes", std::mem::align_of::<SevStatus>());
             
             // Try to get status
-            match SEV_GET_STATUS.ioctl(file) {
-                Ok((_, status)) => {
+            match SEV_GET_STATUS.ioctl(file, &mut status) {
+                Ok(_) => {
                     println!("SEV Status:");
                     println!("  Version: {}.{}", status.major, status.minor);
                     println!("  State: {}", status.state);
