@@ -1,7 +1,6 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use sev::firmware::host::Firmware;
-use sev::firmware::Error as SevError;
 
 #[derive(Debug, Error)]
 pub enum ClockError {
@@ -9,7 +8,7 @@ pub enum ClockError {
     NotInitialized,
     
     #[error("SEV firmware error: {0}")]
-    FirmwareError(#[from] SevError),
+    FirmwareError(String),
     
     #[error("System time error: {0}")]
     SystemTimeError(#[from] std::time::SystemTimeError),
@@ -25,9 +24,13 @@ impl Clock {
     }
 
     pub fn init(&mut self) -> Result<(), ClockError> {
-        let firmware = Firmware::open()?;
-        self.firmware = Some(firmware);
-        Ok(())
+        match Firmware::open() {
+            Ok(firmware) => {
+                self.firmware = Some(firmware);
+                Ok(())
+            }
+            Err(e) => Err(ClockError::FirmwareError(e.to_string())),
+        }
     }
 
     pub fn get_time_ms(&self) -> Result<u64, ClockError> {
