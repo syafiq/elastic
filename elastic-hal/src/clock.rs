@@ -148,8 +148,15 @@ impl Clock {
             return Err(ClockError::NotInitialized);
         }
 
-        let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
-        Ok(now.as_millis() as u64)
+        // Try to get time from SEV device first
+        match self.get_time() {
+            Ok(time) => Ok(time * 1000), // Convert seconds to milliseconds
+            Err(e) => {
+                println!("Falling back to system time: {}", e);
+                let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
+                Ok(now.as_millis() as u64)
+            }
+        }
     }
 
     pub fn get_time_us(&self) -> Result<u64, ClockError> {
@@ -157,8 +164,15 @@ impl Clock {
             return Err(ClockError::NotInitialized);
         }
 
-        let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
-        Ok(now.as_micros() as u64)
+        // Try to get time from SEV device first
+        match self.get_time() {
+            Ok(time) => Ok(time * 1_000_000), // Convert seconds to microseconds
+            Err(e) => {
+                println!("Falling back to system time: {}", e);
+                let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
+                Ok(now.as_micros() as u64)
+            }
+        }
     }
 
     pub async fn sleep_ms(&self, ms: u32) -> Result<(), ClockError> {
