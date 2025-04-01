@@ -29,7 +29,7 @@ pub enum ClockError {
 
 // SEV IOCTL commands
 const SEV_IOCTL_BASE: u64 = 0xAE00;
-const SEV_IOCTL_PLATFORM_STATUS: u64 = SEV_IOCTL_BASE + 0x04;
+const SEV_IOCTL_PLATFORM_STATUS: u64 = SEV_IOCTL_BASE + 0x00;
 
 #[repr(C)]
 struct SevPlatformStatus {
@@ -39,6 +39,7 @@ struct SevPlatformStatus {
     config: u32,
     build: u32,
     guest_count: u32,
+    _reserved: [u32; 2],  // Add padding to match kernel struct
 }
 
 pub struct Clock {
@@ -123,7 +124,14 @@ impl Clock {
                 config: 0,
                 build: 0,
                 guest_count: 0,
+                _reserved: [0; 2],
             };
+            
+            // Print diagnostic information about the ioctl command
+            println!("\nAttempting SEV ioctl:");
+            println!("Command: 0x{:X}", SEV_IOCTL_PLATFORM_STATUS);
+            println!("Struct size: {} bytes", std::mem::size_of::<SevPlatformStatus>());
+            println!("Struct alignment: {} bytes", std::mem::align_of::<SevPlatformStatus>());
             
             // Try to get platform status
             let result = unsafe {
@@ -145,6 +153,8 @@ impl Clock {
             } else {
                 let err = io::Error::last_os_error();
                 println!("Failed to get SEV platform status: {}", err);
+                println!("Error code: {}", err.kind());
+                println!("Error message: {}", err.to_string());
                 Ok(false)
             }
         } else {
