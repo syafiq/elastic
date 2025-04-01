@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::fs;
 use std::env;
 use std::io;
+use std::os::unix::fs::MetadataExt;
 
 #[derive(Debug, Error)]
 pub enum ClockError {
