@@ -1,6 +1,7 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use sev::firmware::host::Firmware;
+use std::path::PathBuf;
 
 #[derive(Debug, Error)]
 pub enum ClockError {
@@ -27,12 +28,16 @@ impl Clock {
     }
 
     pub fn init(&mut self) -> Result<(), ClockError> {
-        // Set the SEV device path environment variable
-        std::env::set_var("SEV_DEVICE", "/dev/sev-guest");
-        
+        // Try to open the SEV device directly
+        let sev_path = PathBuf::from("/dev/sev-guest");
+        if !sev_path.exists() {
+            return Err(ClockError::SevNotAvailable("SEV device not found at /dev/sev-guest".to_string()));
+        }
+
         match Firmware::open() {
             Ok(firmware) => {
                 self.firmware = Some(firmware);
+                println!("Successfully initialized SEV firmware");
                 Ok(())
             }
             Err(e) => {
