@@ -167,6 +167,7 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "hmac",
+ "pkcs8",
  "rand",
  "rsa",
  "sha2",
@@ -690,6 +691,7 @@ dependencies = [
  "pkcs1",
  "pkcs8",
  "rand_core",
+ "sha2",
  "signature",
  "spki",
  "subtle",

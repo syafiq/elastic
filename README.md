@@ -21,8 +21,8 @@ This repository contains the implementation of the Hardware Abstraction Layer (H
 
 ### Crypto Interface
 - Symmetric encryption/decryption (AES-256-GCM)
-- Asymmetric encryption/decryption (RSA-2048, RSA-4096)
-- Digital signing and verification
+- Asymmetric encryption/decryption (RSA-2048)
+- Digital signing and verification with SHA-256 hashing
 - Cryptographic hashing (SHA-256, SHA-512)
 - Message Authentication Code (HMAC-SHA-256)
 - Key management and context handling
@@ -120,14 +120,13 @@ package elastic:crypto@0.1.0;
 
 interface types {
     variant crypto-error {
-        invalid-key(string),
-        invalid-algorithm(string),
-        encryption-error(string),
-        decryption-error(string),
-        signing-error(string),
-        verification-error(string),
-        hashing-error(string),
-        mac-error(string),
+        invalid-key,
+        encryption-failed,
+        decryption-failed,
+        signing-failed,
+        verification-failed,
+        mac-failed,
+        unsupported-algorithm,
     }
 
     enum key-type {
@@ -138,10 +137,8 @@ interface types {
     enum algorithm {
         aes-256-gcm,
         rsa-2048,
-        rsa-4096,
         sha-256,
         sha-512,
-        hmac-sha-256,
     }
 }
 
@@ -250,26 +247,31 @@ let decrypted = crypto.symmetric_decrypt(handle, &encrypted).unwrap();
 assert_eq!(decrypted, data);
 
 // Public key operations example
-let mut rng = rand::thread_rng();
-let private_key = rsa::RsaPrivateKey::new(&mut rng, 2048).unwrap();
-let public_key = rsa::RsaPublicKey::from(&private_key);
+let mut rng = OsRng;
+let private_key = RsaPrivateKey::new(&mut rng, 2048).unwrap();
+let public_key = RsaPublicKey::from(&private_key);
 
-let private_handle = crypto.load_key(&private_key.to_pkcs8_der().unwrap(), 
-    KeyType::Asymmetric, Algorithm::Rsa2048).unwrap();
-let public_handle = crypto.load_key(&public_key.to_public_key_der().unwrap(), 
-    KeyType::Asymmetric, Algorithm::Rsa2048).unwrap();
+// Export keys
+let private_key_der = private_key.to_pkcs8_der().unwrap();
+let public_key_der = public_key.to_public_key_der().unwrap();
 
+// Load keys
+let private_handle = crypto.load_key(&private_key_der, KeyType::Asymmetric, Algorithm::Rsa2048).unwrap();
+let public_handle = crypto.load_key(&public_key_der, KeyType::Asymmetric, Algorithm::Rsa2048).unwrap();
+
+// Encrypt with public key
 let encrypted = crypto.public_key_encrypt(public_handle, data).unwrap();
 let decrypted = crypto.public_key_decrypt(private_handle, &encrypted).unwrap();
 assert_eq!(decrypted, data);
 
-// Hashing example
-let hash = crypto.hash(Algorithm::Sha256, data).unwrap();
-assert_eq!(hash.len(), 32);
+// Sign and verify
+let signature = crypto.sign(private_handle, data).unwrap();
+let verified = crypto.verify(public_handle, data, &signature).unwrap();
+assert!(verified);
 
-// MAC example
-let mac = crypto.calculate_mac(handle, data).unwrap();
-assert_eq!(mac.len(), 32);
+// Clean up
+crypto.unload_key(private_handle).unwrap();
+crypto.unload_key(public_handle).unwrap();
 ```
 
 ## Testing

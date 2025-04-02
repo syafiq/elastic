@@ -1,7 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
-use std::sync::Arc;
-use wit_bindgen::rt::string::String;
+use std::sync::{Arc, Mutex};
 use wit_bindgen::rt::vec::Vec;
 use aes_gcm::{
     aead::{Aead, KeyInit},
@@ -9,96 +7,104 @@ use aes_gcm::{
 };
 use rand::{rngs::OsRng, RngCore};
 use rsa::{
-    pkcs8::{DecodePrivateKey, EncodePrivateKey, EncodePublicKey, LineEnding},
-    RsaPrivateKey, RsaPublicKey, Pkcs1v15Sign,
+    pkcs8::{DecodePrivateKey, DecodePublicKey},
+    RsaPrivateKey, RsaPublicKey, Pkcs1v15Sign, Pkcs1v15Encrypt,
+    traits::SignatureScheme,
 };
-use sha2::{Sha256, Digest};
+use sha2::{Sha256, Sha512, Digest};
 use hmac::{Hmac, Mac};
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Error, Debug)]
 pub enum CryptoError {
-    #[error("Invalid key: {0}")]
-    InvalidKey(String),
-    #[error("Invalid algorithm: {0}")]
-    InvalidAlgorithm(String),
-    #[error("Encryption error: {0}")]
-    EncryptionError(String),
-    #[error("Decryption error: {0}")]
-    DecryptionError(String),
-    #[error("Signing error: {0}")]
-    SigningError(String),
-    #[error("Verification error: {0}")]
-    VerificationError(String),
-    #[error("Hashing error: {0}")]
-    HashingError(String),
-    #[error("MAC error: {0}")]
-    MacError(String),
-    #[error("Unsupported operation")]
-    UnsupportedOperation,
+    #[error("Invalid key")]
+    InvalidKey,
+    #[error("Encryption failed")]
+    EncryptionFailed,
+    #[error("Decryption failed")]
+    DecryptionFailed,
+    #[error("Signing failed")]
+    SigningFailed,
+    #[error("Verification failed")]
+    VerificationFailed,
+    #[error("MAC calculation failed")]
+    MacFailed,
+    #[error("Unsupported algorithm")]
+    UnsupportedAlgorithm,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum KeyType {
     Symmetric,
     Asymmetric,
-    Rsa2048,
-    Rsa4096,
-    Hmac256,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum Algorithm {
     Aes256Gcm,
     Rsa2048,
-    Rsa4096,
     Sha256,
     Sha512,
-    HmacSha256,
 }
 
-enum CryptoKey {
-    Symmetric(Aes256Gcm),
-    AsymmetricPrivate(RsaPrivateKey),
-    AsymmetricPublic(RsaPublicKey),
+#[derive(Debug)]
+pub enum CryptoKey {
+    Symmetric(Vec<u8>),
+    Private(RsaPrivateKey),
+    Public(RsaPublicKey),
 }
 
 pub struct CryptoContext {
-    keys: Mutex<HashMap<u32, CryptoKey>>,
-    next_handle: Mutex<u32>,
-    key_type: KeyType,
+    keys: Arc<Mutex<HashMap<u32, CryptoKey>>>,
+    next_handle: Arc<Mutex<u32>>,
 }
 
 impl CryptoContext {
     pub fn new() -> Self {
         CryptoContext {
-            keys: Mutex::new(HashMap::new()),
-            next_handle: Mutex::new(1),
-            key_type: KeyType::Symmetric,
+            keys: Arc::new(Mutex::new(HashMap::new())),
+            next_handle: Arc::new(Mutex::new(1)),
         }
     }
 
     pub fn load_key(&self, key: &[u8], key_type: KeyType, algorithm: Algorithm) -> Result<u32, CryptoError> {
+        println!("Loading key with type: {:?}, algorithm: {:?}, key length: {}", key_type, algorithm, key.len());
         let crypto_key = match (key_type, algorithm) {
             (KeyType::Symmetric, Algorithm::Aes256Gcm) => {
                 if key.len() != 32 {
-                    return Err(CryptoError::InvalidKey("AES-256-GCM requires a 32-byte key".to_string()));
+                    println!("Invalid symmetric key length: {}", key.len());
+                    return Err(CryptoError::InvalidKey);
                 }
-                let key = Key::<Aes256Gcm>::from_slice(key);
-                CryptoKey::Symmetric(Aes256Gcm::new(key))
+                CryptoKey::Symmetric(key.to_vec())
             },
-            (KeyType::Asymmetric, Algorithm::Rsa2048) | (KeyType::Asymmetric, Algorithm::Rsa4096) => {
+            (KeyType::Asymmetric, Algorithm::Rsa2048) => {
+                println!("Attempting to load RSA key of length {}", key.len());
+                // First try loading as private key
                 match RsaPrivateKey::from_pkcs8_der(key) {
-                    Ok(private_key) => CryptoKey::AsymmetricPrivate(private_key),
-                    Err(_) => {
-                        // Try loading as public key if private key loading fails
-                        let public_key = RsaPublicKey::from_public_key_der(key)
-                            .map_err(|e| CryptoError::InvalidKey(e.to_string()))?;
-                        CryptoKey::AsymmetricPublic(public_key)
+                    Ok(private_key) => {
+                        println!("Successfully loaded RSA private key");
+                        CryptoKey::Private(private_key)
+                    },
+                    Err(private_err) => {
+                        println!("Failed to load private key: {:?}", private_err);
+                        println!("Attempting to load as public key...");
+                        match RsaPublicKey::from_public_key_der(key) {
+                            Ok(public_key) => {
+                                println!("Successfully loaded RSA public key");
+                                CryptoKey::Public(public_key)
+                            },
+                            Err(public_err) => {
+                                println!("Failed to load public key: {:?}", public_err);
+                                return Err(CryptoError::InvalidKey);
+                            }
+                        }
                     }
                 }
             },
-            _ => return Err(CryptoError::InvalidAlgorithm("Unsupported key type and algorithm combination".to_string())),
+            _ => {
+                println!("Unsupported algorithm combination: {:?}, {:?}", key_type, algorithm);
+                return Err(CryptoError::UnsupportedAlgorithm);
+            }
         };
 
         let mut handles = self.keys.lock().unwrap();
@@ -106,100 +112,157 @@ impl CryptoContext {
         let handle = *next_handle;
         *next_handle += 1;
 
+        println!("Assigning handle {} to key", handle);
         handles.insert(handle, crypto_key);
         Ok(handle)
     }
 
     pub fn unload_key(&self, handle: u32) -> Result<(), CryptoError> {
         let mut keys = self.keys.lock().unwrap();
-        keys.remove(&handle).ok_or_else(|| CryptoError::InvalidKey("Key not found".to_string()))?;
+        keys.remove(&handle).ok_or_else(|| CryptoError::InvalidKey)?;
         Ok(())
     }
 
     pub fn public_key_encrypt(&self, handle: u32, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
         let keys = self.keys.lock().unwrap();
-        let key = keys.get(&handle).ok_or_else(|| CryptoError::InvalidKey("Key not found".to_string()))?;
+        let key = keys.get(&handle).ok_or_else(|| CryptoError::InvalidKey)?;
 
         match key {
-            CryptoKey::AsymmetricPublic(public_key) => {
-                let mut rng = rand::thread_rng();
+            CryptoKey::Public(public_key) => {
+                let mut rng = OsRng;
+                println!("Attempting to encrypt with public key");
                 public_key.encrypt(&mut rng, Pkcs1v15Encrypt, data)
-                    .map_err(|e| CryptoError::EncryptionError(e.to_string()))
+                    .map_err(|e| {
+                        println!("Encryption error: {:?}", e);
+                        CryptoError::EncryptionFailed
+                    })
             },
-            _ => Err(CryptoError::InvalidKey("Not a public key".to_string())),
+            _ => {
+                println!("Invalid key type for encryption");
+                Err(CryptoError::InvalidKey)
+            }
         }
     }
 
     pub fn public_key_decrypt(&self, handle: u32, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
         let keys = self.keys.lock().unwrap();
-        let key = keys.get(&handle).ok_or_else(|| CryptoError::InvalidKey("Key not found".to_string()))?;
+        let key = keys.get(&handle).ok_or_else(|| CryptoError::InvalidKey)?;
 
         match key {
-            CryptoKey::AsymmetricPrivate(private_key) => {
+            CryptoKey::Private(private_key) => {
+                println!("Attempting to decrypt with private key");
                 private_key.decrypt(Pkcs1v15Encrypt, data)
-                    .map_err(|e| CryptoError::DecryptionError(e.to_string()))
+                    .map_err(|e| {
+                        println!("Decryption error: {:?}", e);
+                        CryptoError::DecryptionFailed
+                    })
             },
-            _ => Err(CryptoError::InvalidKey("Not a private key".to_string())),
+            _ => {
+                println!("Invalid key type for decryption");
+                Err(CryptoError::InvalidKey)
+            }
         }
     }
 
-    pub fn sign(&self, data: &[u8], key: &[u8]) -> Result<Vec<u8>, CryptoError> {
-        match self.key_type {
-            KeyType::Rsa2048 | KeyType::Rsa4096 => {
-                let private_key = RsaPrivateKey::from_pkcs8_der(key)
-                    .map_err(|_| CryptoError::InvalidKey)?;
+    pub fn sign(&self, handle: u32, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
+        let keys = self.keys.lock().unwrap();
+        let key = keys.get(&handle).ok_or(CryptoError::InvalidKey)?;
+
+        match key {
+            CryptoKey::Private(private_key) => {
+                let mut rng = OsRng;
+                println!("Attempting to sign with private key");
+                // Hash the input data first
                 let mut hasher = Sha256::new();
                 hasher.update(data);
                 let hash = hasher.finalize();
-                let signing_key = Pkcs1v15Sign::new();
-                let signature = signing_key.sign(&hash, &private_key)
-                    .map_err(|_| CryptoError::SigningError("Signing failed".to_string()))?;
-                Ok(signature)
+                
+                let padding = Pkcs1v15Sign::new::<Sha256>();
+                padding.sign(Some(&mut rng), private_key, &hash)
+                    .map_err(|e| {
+                        println!("Signing error: {:?}", e);
+                        CryptoError::SigningFailed
+                    })
             }
-            _ => Err(CryptoError::UnsupportedOperation),
+            _ => {
+                println!("Invalid key type for signing");
+                Err(CryptoError::InvalidKey)
+            }
         }
     }
 
-    pub fn verify(&self, data: &[u8], signature: &[u8], key: &[u8]) -> Result<bool, CryptoError> {
-        match self.key_type {
-            KeyType::Rsa2048 | KeyType::Rsa4096 => {
-                let public_key = RsaPublicKey::from_public_key_der(key)
-                    .map_err(|_| CryptoError::InvalidKey)?;
+    pub fn verify(&self, handle: u32, data: &[u8], signature: &[u8]) -> Result<bool, CryptoError> {
+        let keys = self.keys.lock().unwrap();
+        let key = keys.get(&handle).ok_or(CryptoError::InvalidKey)?;
+
+        match key {
+            CryptoKey::Public(public_key) => {
+                println!("Attempting to verify with public key");
+                // Hash the input data first
                 let mut hasher = Sha256::new();
                 hasher.update(data);
                 let hash = hasher.finalize();
-                let verifying_key = Pkcs1v15Sign::new();
-                Ok(verifying_key.verify(&hash, signature, &public_key).is_ok())
+                
+                let padding = Pkcs1v15Sign::new::<Sha256>();
+                Ok(padding.verify(public_key, &hash, signature).is_ok())
             }
-            _ => Err(CryptoError::UnsupportedOperation),
+            _ => {
+                println!("Invalid key type for verification");
+                Err(CryptoError::InvalidKey)
+            }
         }
     }
 
     pub fn symmetric_encrypt(&self, handle: u32, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
         let keys = self.keys.lock().unwrap();
-        let key = keys.get(&handle).ok_or_else(|| CryptoError::InvalidKey("Key not found".to_string()))?;
+        let key = keys.get(&handle).ok_or(CryptoError::InvalidKey)?;
 
         match key {
-            CryptoKey::Symmetric(cipher) => {
-                let nonce = Nonce::from_slice(b"unique nonce"); // In production, use a unique nonce per encryption
-                cipher.encrypt(nonce, data)
-                    .map_err(|e| CryptoError::EncryptionError(e.to_string()))
+            CryptoKey::Symmetric(key_data) => {
+                let key = Key::<Aes256Gcm>::from_slice(key_data);
+                let cipher = Aes256Gcm::new(key);
+                
+                // Generate a random nonce
+                let mut nonce_bytes = [0u8; 12];
+                OsRng.fill_bytes(&mut nonce_bytes);
+                let nonce = Nonce::from_slice(&nonce_bytes);
+                
+                // Encrypt the data
+                let ciphertext = cipher.encrypt(nonce, data)
+                    .map_err(|_| CryptoError::EncryptionFailed)?;
+                
+                // Combine nonce and ciphertext
+                let mut result = Vec::with_capacity(12 + ciphertext.len());
+                result.extend_from_slice(&nonce_bytes);
+                result.extend_from_slice(&ciphertext);
+                Ok(result)
             },
-            _ => Err(CryptoError::InvalidKey("Not a symmetric key".to_string())),
+            _ => Err(CryptoError::InvalidKey),
         }
     }
 
     pub fn symmetric_decrypt(&self, handle: u32, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
+        if data.len() < 12 {
+            return Err(CryptoError::DecryptionFailed);
+        }
+
         let keys = self.keys.lock().unwrap();
-        let key = keys.get(&handle).ok_or_else(|| CryptoError::InvalidKey("Key not found".to_string()))?;
+        let key = keys.get(&handle).ok_or(CryptoError::InvalidKey)?;
 
         match key {
-            CryptoKey::Symmetric(cipher) => {
-                let nonce = Nonce::from_slice(b"unique nonce"); // In production, use a unique nonce per encryption
-                cipher.decrypt(nonce, data)
-                    .map_err(|e| CryptoError::DecryptionError(e.to_string()))
+            CryptoKey::Symmetric(key_data) => {
+                let key = Key::<Aes256Gcm>::from_slice(key_data);
+                let cipher = Aes256Gcm::new(key);
+                
+                // Split data into nonce and ciphertext
+                let nonce = Nonce::from_slice(&data[..12]);
+                let ciphertext = &data[12..];
+                
+                // Decrypt the data
+                cipher.decrypt(nonce, ciphertext)
+                    .map_err(|_| CryptoError::DecryptionFailed)
             },
-            _ => Err(CryptoError::InvalidKey("Not a symmetric key".to_string())),
+            _ => Err(CryptoError::InvalidKey),
         }
     }
 
@@ -215,18 +278,28 @@ impl CryptoContext {
                 hasher.update(data);
                 Ok(hasher.finalize().to_vec())
             },
-            _ => Err(CryptoError::InvalidAlgorithm("Unsupported hashing algorithm".to_string())),
+            _ => Err(CryptoError::UnsupportedAlgorithm),
         }
     }
 
-    pub fn calculate_mac(&self, data: &[u8], key: &[u8]) -> Result<Vec<u8>, CryptoError> {
-        match self.key_type {
-            KeyType::Hmac256 => {
-                let mut mac = Hmac::<Sha256>::new(key.into());
+    pub fn calculate_mac(&self, handle: u32, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
+        let keys = self.keys.lock().unwrap();
+        let key = keys.get(&handle).ok_or(CryptoError::InvalidKey)?;
+
+        match key {
+            CryptoKey::Symmetric(key_data) => {
+                let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key_data)
+                    .map_err(|_| CryptoError::MacFailed)?;
                 mac.update(data);
                 Ok(mac.finalize().into_bytes().to_vec())
             }
-            _ => Err(CryptoError::UnsupportedOperation),
+            _ => Err(CryptoError::InvalidKey),
         }
+    }
+}
+
+impl Default for CryptoContext {
+    fn default() -> Self {
+        Self::new()
     }
 } 
