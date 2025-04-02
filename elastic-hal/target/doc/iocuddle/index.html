@@ -1,0 +1,111 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`iocuddle` is a library for building runtime-safe `ioctl()` interfaces."><title>iocuddle - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="iocuddle" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.1 (4eb161250 2025-03-15)" data-channel="1.85.1" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../static.files/storage-59e33391.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../iocuddle/index.html">iocuddle</a><span class="version">0.1.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#interfaces" title="Interfaces">Interfaces</a><ul><li><a href="#classic-interfaces" title="Classic Interfaces">Classic Interfaces</a></li><li><a href="#modern-interfaces" title="Modern Interfaces">Modern Interfaces</a></li></ul></li><li><a href="#kernel-documentation" title="Kernel Documentation">Kernel Documentation</a></li></ul><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>iocuddle</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/iocuddle/lib.rs.html#3-393">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>iocuddle</code> is a library for building runtime-safe <code>ioctl()</code> interfaces.</p>
+<p>Existing approaches to interfacing with <code>ioctl</code>s from Rust rely on casting
+and/or unsafe code declarations at the call site. This moves the burden of
+safety to the consumer of the <code>ioctl</code> interface, which is less than ideal.</p>
+<p>In contrast, <code>iocuddle</code> attempts to move the unsafe code burden to <code>ioctl</code>
+definition. Once an <code>ioctl</code> is defined, all executions of that <code>ioctl</code> can
+be done within safe code.</p>
+<h2 id="interfaces"><a class="doc-anchor" href="#interfaces">§</a>Interfaces</h2>
+<p><code>iocuddle</code> aims to handle &gt;=99% of the kernel’s <code>ioctl</code> interfaces.
+However, we do not aim to handle all possible <code>ioctl</code> interfaces. We will
+outline the different <code>ioctl</code> interfaces below.</p>
+<h3 id="classic-interfaces"><a class="doc-anchor" href="#classic-interfaces">§</a>Classic Interfaces</h3>
+<p>Classic <code>ioctl</code> interfaces are those <code>ioctl</code>s which were created before
+the modern interfaces we will see below. They basically allowed the full
+usage of the <code>ioctl</code> libc function which is defined as this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::os::raw::{c_int, c_ulong};
+<span class="kw">extern </span><span class="string">"C" </span>{ <span class="kw">fn </span>ioctl(fd: c_int, request: c_ulong, ...) -&gt; c_int; }</code></pre></div>
+<p>This interface can take any number of any type of arguments and can return
+any positive integer (with <code>-1</code> reserved for indicating an error in
+combination with <code>errno</code>).</p>
+<p>One major drawback of this interface is that it entirely punts on compiler
+checking of type safety. A particular <code>request</code> is implicitly associated
+with one or more types that are usually listed in the relevant <code>ioctl</code> man
+page. If the programmer gets any of the types wrong, you end up with
+corrupted memory.</p>
+<p>The problems with this interface were recognized early on. Therefore,
+most <code>ioctl</code>s support only a single argument to reduce complexity. But
+this does not solve the problem of the lack of compiler-enforced type
+safety.</p>
+<p><code>iocuddle</code> does not currently support <code>ioctl</code>s with multiple arguments.
+Otherwise, classic <code>ioctl</code> interfaces can be defined and used via the
+<code>Ioctl::classic()</code> constructor as follows:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::os::raw::{c_void, c_int, c_uint};
+<span class="kw">use </span>iocuddle::<span class="kw-2">*</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>file = std::fs::File::open(<span class="string">"/dev/tty"</span>).unwrap_or_else(|<span class="kw">_</span>| std::process::exit(<span class="number">0</span>));
+
+<span class="comment">// This is the simplest ioctl call. The request number is provided via the
+// Ioctl::classic() constructor. This ioctl reads a C integer from the
+// kernel by internally passing a reference to a c_int as the argument to
+// the ioctl. This c_int is returned in the Ok status of the ioctl Result.
+//
+// Notice that since the state of the file descriptor is not modified via
+// this ioctl, we define it using the Read parameter.
+</span><span class="kw">const </span>TIOCINQ: Ioctl&lt;Read, <span class="kw-2">&amp;</span>c_int&gt; = <span class="kw">unsafe </span>{ Ioctl::classic(<span class="number">0x541B</span>) };
+<span class="macro">assert_eq!</span>(TIOCINQ.ioctl(<span class="kw-2">&amp;</span>file).unwrap(), (<span class="number">0 </span><span class="kw">as </span>c_uint, <span class="number">0 </span><span class="kw">as </span>c_int));
+
+<span class="comment">// This ioctl is similar to the previous one. It differs in two important
+// respects. First, this raw ioctl takes an input argument rather than an
+// output argument. This raw argument is a C integer *NOT* a reference to
+// a C integer. Second, since this ioctl modifies the state of the file
+// descriptor we use Write instead of Read.
+//
+// Notice that the return value of the TCSBRK.ioctl() call is the positive
+// integer returned from the raw ioctl(), unlike the previous example. It
+// is not the input argument type.
+</span><span class="kw">const </span>TCSBRK: Ioctl&lt;Write, c_int&gt; = <span class="kw">unsafe </span>{ Ioctl::classic(<span class="number">0x5409</span>) };
+<span class="macro">assert_eq!</span>(TCSBRK.ioctl(<span class="kw-2">&amp;mut </span>file, <span class="number">0</span>).unwrap(), <span class="number">0 </span><span class="kw">as </span>c_uint);
+
+<span class="comment">// `iocuddle` can also support classic ioctls with no argument. These
+// always modify the file descriptor state, so the Write parameter is
+// used.
+</span><span class="kw">const </span>TIOCSBRK: Ioctl&lt;Write, c_void&gt; = <span class="kw">unsafe </span>{ Ioctl::classic(<span class="number">0x5427</span>) };
+<span class="kw">const </span>TIOCCBRK: Ioctl&lt;Write, c_void&gt; = <span class="kw">unsafe </span>{ Ioctl::classic(<span class="number">0x5428</span>) };
+<span class="macro">assert_eq!</span>(TIOCSBRK.ioctl(<span class="kw-2">&amp;mut </span>file).unwrap(), <span class="number">0</span>);
+<span class="macro">assert_eq!</span>(TIOCCBRK.ioctl(<span class="kw-2">&amp;mut </span>file).unwrap(), <span class="number">0</span>);</code></pre></div>
+<h3 id="modern-interfaces"><a class="doc-anchor" href="#modern-interfaces">§</a>Modern Interfaces</h3>
+<p>In order to alleviate the type-safety problem with the classic interfaces,
+the Linux kernel developed a new set of conventions for developing
+<code>ioctl</code>s. We call these conventions the modern interface.</p>
+<p>Modern <code>ioctl</code> interfaces always take a single reference to a struct or
+integer and return <code>-1</code> on failure and <code>0</code> (or occasionally another
+positive integer) on success. The <code>ioctl</code> request number is constructed
+from four parameters:</p>
+<ul>
+<li>a <code>group</code> (confusingly called <code>type</code> in the kernel macros)</li>
+<li>a <code>nr</code> (number)</li>
+<li>a <code>direction</code></li>
+<li>(the size of) a <code>type</code></li>
+</ul>
+<p>The <code>group</code> parameter is used as a namespace to group related <code>ioctl</code>s.
+It is an integer value.</p>
+<p>The <code>nr</code> parameter is an integer discriminator to uniquely identify the
+<code>ioctl</code> within the <code>group</code>.</p>
+<p>The <code>direction</code> parameter identifies which direction the data flows. If the
+data flows from userspace to the kernel, this is the <code>write</code> <code>direction</code>.
+If data flows from the kernel to userspace, this is the <code>read</code> <code>direction</code>.
+Data which flows both ways is tagged with the <code>write/read</code> <code>direction</code>.</p>
+<p>The <code>type</code> parameter identifies the type that should be used with this
+<code>ioctl</code>. In the kernel C code this type is only directly used to perturb
+the <code>ioctl</code> request number with the size of the type. <code>iocuddle</code>
+additionally uses this parameter to provide type safety.</p>
+<p>Defining modern <code>ioctl</code>s using <code>iocuddle</code> looks like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>iocuddle::<span class="kw-2">*</span>;
+
+<span class="comment">// Define the Group of KVM ioctls.
+</span><span class="kw">const </span>KVM: Group = Group::new(<span class="number">0xAE</span>);
+
+<span class="comment">// Define ioctls within the KVM group.
+//
+// The nr is passed to the direction-specific constructor.
+</span><span class="kw">const </span>KVM_PPC_ALLOCATE_HTAB: Ioctl&lt;WriteRead, <span class="kw-2">&amp;</span>u32&gt; = <span class="kw">unsafe </span>{ KVM.write_read(<span class="number">0xa7</span>) };
+<span class="kw">const </span>KVM_X86_GET_MCE_CAP_SUPPORTED: Ioctl&lt;Read, <span class="kw-2">&amp;</span>u64&gt; = <span class="kw">unsafe </span>{ KVM.read(<span class="number">0x9d</span>) };
+<span class="kw">const </span>KVM_X86_SETUP_MCE: Ioctl&lt;Write, <span class="kw-2">&amp;</span>u64&gt; = <span class="kw">unsafe </span>{ KVM.write(<span class="number">0x9c</span>) };</code></pre></div>
+<h2 id="kernel-documentation"><a class="doc-anchor" href="#kernel-documentation">§</a>Kernel Documentation</h2>
+<p>For the kernel documentation of the ioctl process, see the following file
+in the kernel source tree: <code>Documentation/userspace-api/ioctl/ioctl-number.rst</code></p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Group.html" title="struct iocuddle::Group">Group</a></div><div class="desc docblock-short">A collection of related <code>ioctl</code>s</div></li><li><div class="item-name"><a class="struct" href="struct.Ioctl.html" title="struct iocuddle::Ioctl">Ioctl</a></div><div class="desc docblock-short">A defined <code>ioctl</code> along with its associated <code>direction</code> and <code>type</code></div></li><li><div class="item-name"><a class="struct" href="struct.Read.html" title="struct iocuddle::Read">Read</a></div><div class="desc docblock-short">A marker for the read direction</div></li><li><div class="item-name"><a class="struct" href="struct.Write.html" title="struct iocuddle::Write">Write</a></div><div class="desc docblock-short">A marker for the write direction</div></li><li><div class="item-name"><a class="struct" href="struct.WriteRead.html" title="struct iocuddle::WriteRead">Write<wbr>Read</a></div><div class="desc docblock-short">A marker for the write/read direction</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.ioctl.html" title="fn iocuddle::ioctl">ioctl</a><span title="Restricted Visibility">&nbsp;🔒</span> <sup title="unsafe function">⚠</sup></div></li></ul></section></div></main></body></html>
