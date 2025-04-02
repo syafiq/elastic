@@ -57,16 +57,30 @@ ELASTIC (Enclave Layer for Secure Time, Information, and Cryptography) is a Hard
   - Added symmetric encryption/decryption (AES-GCM)
   - Started RSA implementation for asymmetric operations
   - Added hashing and MAC functionality
-- ⚠️ In Progress: Fixing compilation issues
-  - Need to fix RSA signing implementation
-    - Issues with `Pkcs1v15Sign` and `SignatureScheme` traits
-    - Problems with key loading and conversion
-  - Need to resolve HMAC initialization
-    - Multiple `new` methods causing ambiguity
-    - Need to properly specify which implementation to use
-  - Need to update dependencies
-    - Added `pkcs8` as a separate dependency
-    - Updated RSA features to include only available ones
+- ✅ Completed implementation
+  - Fixed RSA signing implementation
+  - Resolved HMAC initialization
+  - Updated dependencies
+  - Added comprehensive tests
+
+### TLS Interface
+- ⏳ Planning phase
+  - Define WIT interface for TLS operations
+  - Plan certificate and key management
+  - Design connection handling
+  - Plan secure data transfer
+- ⏳ Implementation pending
+  - Need to implement TLS context management
+  - Need to implement certificate handling
+  - Need to implement connection management
+  - Need to implement secure data transfer
+  - Need to implement connection information
+- ⏳ Testing pending
+  - Need to create test suite
+  - Need to test client connections
+  - Need to test server connections
+  - Need to test certificate verification
+  - Need to test error handling
 
 ## Current Status
 - Clock Interface: Complete and tested
@@ -77,33 +91,44 @@ ELASTIC (Enclave Layer for Secure Time, Information, and Cryptography) is a Hard
   - All functionality implemented and working
   - Tests passing successfully
   - Documentation updated in README.md
-- Crypto Interface: In progress, needs fixes
-  - Basic structure implemented
-  - Symmetric operations working
-  - Asymmetric operations need fixes
-  - Tests partially implemented
+- Crypto Interface: Complete and tested
+  - All functionality implemented and working
+  - Tests passing successfully
+  - Documentation updated in README.md
+- TLS Interface: Planning phase
+  - WIT interface defined
+  - Implementation pending
+  - Tests pending
 
 ## Next Steps
-1. Fix Crypto Interface compilation issues:
-   - Update RSA signing implementation
-     - Import correct traits (`SignatureScheme`)
-     - Fix key loading and conversion
-     - Update signing and verification methods
-   - Fix HMAC initialization
-     - Use fully qualified syntax to disambiguate
-     - Ensure proper key handling
-   - Resolve dependency conflicts
-     - Update Cargo.toml with correct features
-     - Ensure all dependencies are compatible
-2. Complete Crypto Interface tests
-   - Implement tests for symmetric operations
-   - Implement tests for asymmetric operations
-   - Implement tests for hashing and MAC
-   - Implement tests for error handling
-3. Consider implementing standard (non-SEV) versions of interfaces
-   - Plan architecture for dual implementations
-   - Design abstraction layer for environment detection
-   - Implement standard versions of each interface
+1. Begin TLS Interface implementation:
+   - Create TLS context management
+     - Implement context creation and destruction
+     - Add configuration handling
+     - Add certificate and key management
+   - Implement connection handling
+     - Add client connection support
+     - Add server connection support
+     - Add connection cleanup
+   - Implement secure data transfer
+     - Add write operations
+     - Add read operations
+     - Add buffer management
+   - Implement connection information
+     - Add peer certificate retrieval
+     - Add protocol version information
+     - Add cipher suite information
+2. Create TLS Interface tests:
+   - Test context management
+   - Test certificate handling
+   - Test client connections
+   - Test server connections
+   - Test data transfer
+   - Test error handling
+3. Update documentation:
+   - Add TLS interface to README.md
+   - Add usage examples
+   - Add test instructions
 
 ## Technical Challenges
 1. RSA Implementation:

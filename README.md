@@ -28,6 +28,15 @@ This repository contains the implementation of the Hardware Abstraction Layer (H
 - Key management and context handling
 - WebAssembly Interface Types (WIT) support for language interoperability
 
+### TLS Interface
+- Secure communication using TLS 1.2 and 1.3
+- Support for multiple cipher suites (AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305)
+- Certificate and key management
+- Client and server connection handling
+- Secure data transfer with automatic encryption/decryption
+- Connection information and peer certificate verification
+- WebAssembly Interface Types (WIT) support for language interoperability
+
 ## WIT Interface Support
 
 ### Clock Interface (clock.wit)
@@ -169,6 +178,73 @@ world crypto-impl {
 }
 ```
 
+### TLS Interface (tls.wit)
+```wit
+package elastic:tls@0.1.0;
+
+interface types {
+    variant tls-error {
+        invalid-certificate,
+        invalid-key,
+        connection-failed,
+        handshake-failed,
+        write-failed,
+        read-failed,
+        unsupported-protocol,
+        unsupported-cipher,
+    }
+
+    enum tls-version {
+        tls-1-2,
+        tls-1-3,
+    }
+
+    enum cipher-suite {
+        tls-aes-128-gcm-sha256,
+        tls-aes-256-gcm-sha384,
+        tls-chacha20-poly1305-sha256,
+    }
+
+    record tls-config {
+        version: tls-version,
+        cipher-suites: list<cipher-suite>,
+        verify-peer: bool,
+        verify-hostname: bool,
+    }
+}
+
+interface tls {
+    use types.{tls-error, tls-version, cipher-suite, tls-config};
+
+    // Context and configuration management
+    create-context: func(config: tls-config) -> result<u32, tls-error>;
+    destroy-context: func(handle: u32) -> result<_, tls-error>;
+
+    // Certificate and key management
+    load-certificate: func(handle: u32, cert: list<u8>) -> result<_, tls-error>;
+    load-private-key: func(handle: u32, key: list<u8>) -> result<_, tls-error>;
+    load-ca-certificates: func(handle: u32, certs: list<u8>) -> result<_, tls-error>;
+
+    // Connection management
+    connect: func(handle: u32, hostname: string, port: u16) -> result<u32, tls-error>;
+    accept: func(handle: u32, port: u16) -> result<u32, tls-error>;
+    close: func(conn: u32) -> result<_, tls-error>;
+
+    // Data transfer
+    write: func(conn: u32, data: list<u8>) -> result<u32, tls-error>;
+    read: func(conn: u32, max-size: u32) -> result<list<u8>, tls-error>;
+
+    // Connection information
+    get-peer-certificate: func(conn: u32) -> result<list<u8>, tls-error>;
+    get-protocol-version: func(conn: u32) -> result<tls-version, tls-error>;
+    get-cipher-suite: func(conn: u32) -> result<cipher-suite, tls-error>;
+}
+
+world tls-impl {
+    export tls;
+}
+```
+
 ## Usage Examples
 
 ### Clock Interface
@@ -274,6 +350,51 @@ crypto.unload_key(private_handle).unwrap();
 crypto.unload_key(public_handle).unwrap();
 ```
 
+### TLS Interface
+
+```rust
+use elastic::tls::{TlsContext, TlsVersion, CipherSuite, TlsConfig};
+
+// Create TLS context with configuration
+let config = TlsConfig {
+    version: TlsVersion::Tls1_3,
+    cipher_suites: vec![
+        CipherSuite::TlsAes256GcmSha384,
+        CipherSuite::TlsChaCha20Poly1305Sha256,
+    ],
+    verify_peer: true,
+    verify_hostname: true,
+};
+
+let tls = TlsContext::new(config).unwrap();
+
+// Load certificates and keys
+tls.load_certificate(&cert_data).unwrap();
+tls.load_private_key(&key_data).unwrap();
+tls.load_ca_certificates(&ca_certs_data).unwrap();
+
+// Client connection example
+let conn = tls.connect("example.com", 443).unwrap();
+tls.write(conn, b"Hello, Server!").unwrap();
+let response = tls.read(conn, 1024).unwrap();
+
+// Server connection example
+let server = tls.accept(8443).unwrap();
+let client_conn = tls.accept(server).unwrap();
+let request = tls.read(client_conn, 1024).unwrap();
+tls.write(client_conn, b"Hello, Client!").unwrap();
+
+// Get connection information
+let peer_cert = tls.get_peer_certificate(client_conn).unwrap();
+let version = tls.get_protocol_version(client_conn).unwrap();
+let cipher = tls.get_cipher_suite(client_conn).unwrap();
+
+// Clean up
+tls.close(client_conn).unwrap();
+tls.close(server).unwrap();
+tls.destroy_context().unwrap();
+```
+
 ## Testing
 
 The project includes comprehensive test suites for all interfaces:
@@ -291,6 +412,11 @@ The project includes comprehensive test suites for all interfaces:
 ### Crypto Interface Tests
 ```bash
 ./tests/run_crypto_tests.sh
+```
+
+### TLS Interface Tests
+```bash
+./tests/run_tls_tests.sh
 ```
 
 ## Dependencies
