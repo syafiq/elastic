@@ -1,50 +1,40 @@
 mod clock;
+mod file;
 
-use std::thread;
-use std::time::Duration;
+use clock::Clock;
 
 fn main() {
-    let mut clock = clock::Clock::new();
+    println!("ELASTIC HAL Implementation");
 
-    // Test current time
-    match clock.read_current_time() {
-        Ok(time) => println!("Current time (seconds since epoch): {}", time),
-        Err(e) => println!("Error reading current time: {}", e),
-    }
+    let mut clock = Clock::new();
 
-    // Test timezone
-    match clock.read_timezone() {
-        Ok(tz) => println!("Current timezone: {}", tz),
-        Err(e) => println!("Error reading timezone: {}", e),
-    }
-
-    // Test monotonic clock
+    // Start monotonic clock
     match clock.start_monotonic() {
         Ok(_) => println!("Started monotonic clock"),
-        Err(e) => println!("Error starting monotonic clock: {}", e),
+        Err(e) => eprintln!("Error starting monotonic clock: {}", e),
     }
 
-    // Sleep for 2 seconds
-    thread::sleep(Duration::from_secs(2));
-
-    // Read elapsed time without stopping
-    match clock.read_monotonic() {
-        Ok(elapsed) => println!("Elapsed time (ms): {}", elapsed),
-        Err(e) => println!("Error reading monotonic clock: {}", e),
+    // Read current time
+    match clock.read_current_time() {
+        Ok(time) => println!("Current time (seconds since epoch): {}", time),
+        Err(e) => eprintln!("Error reading current time: {}", e),
     }
 
-    // Sleep for 1 more second
-    thread::sleep(Duration::from_secs(1));
+    // Read timezone
+    match clock.read_timezone() {
+        Ok(tz) => println!("Current timezone: {}", tz),
+        Err(e) => eprintln!("Error reading timezone: {}", e),
+    }
 
-    // Stop and get final elapsed time
+    // Stop monotonic clock
     match clock.stop_monotonic() {
-        Ok(elapsed) => println!("Final elapsed time (ms): {}", elapsed),
-        Err(e) => println!("Error stopping monotonic clock: {}", e),
+        Ok(_) => println!("Stopped monotonic clock"),
+        Err(e) => eprintln!("Error stopping monotonic clock: {}", e),
     }
 
-    // Try to read monotonic clock after stopping (should error)
+    // Read final elapsed time
     match clock.read_monotonic() {
-        Ok(elapsed) => println!("Unexpected success reading stopped clock: {}", elapsed),
-        Err(e) => println!("Expected error reading stopped clock: {}", e),
+        Ok(elapsed) => println!("Final elapsed time (seconds): {}", elapsed),
+        Err(e) => eprintln!("Error reading monotonic time: {}", e),
     }
 } 

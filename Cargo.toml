@@ -1,6 +1,12 @@
 [package]
-name = "sev-snp-checker"
+name = "elastic"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies] 
+[dependencies]
+wit-bindgen = "0.11.0"
+aes-gcm = "0.10.3"
+rand = "0.8.5"
+
+[dev-dependencies]
+tempfile = "3.8.1" 

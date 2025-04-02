@@ -1,0 +1,64 @@
+package elastic:file@0.1.0;
+
+interface types {
+    // Error types for file operations
+    variant file-error {
+        not-found(string),
+        permission-denied(string),
+        already-exists(string),
+        invalid-operation(string),
+        encryption-error(string),
+        decryption-error(string),
+        io-error(string)
+    }
+
+    // File modes for opening files
+    enum file-mode {
+        read,
+        write,
+        append,
+        read-write
+    }
+
+    // File types
+    enum file-type {
+        regular,
+        directory,
+        symbolic-link
+    }
+
+    // File metadata
+    record file-metadata {
+        name: string,
+        size: u64,
+        file-type: file-type,
+        created: u64,
+        modified: u64,
+        accessed: u64,
+        permissions: u32
+    }
+}
+
+interface file {
+    use types.{file-error, file-mode, file-type, file-metadata};
+
+    // Container operations
+    func open-container(path: string, mode: file-mode) -> result<u32, file-error>;
+    func close-container(handle: u32) -> result<_, file-error>;
+
+    // File operations
+    func read-file(handle: u32, path: string) -> result<list<u8>, file-error>;
+    func write-file(handle: u32, path: string, data: list<u8>) -> result<_, file-error>;
+    func delete-file(handle: u32, path: string) -> result<_, file-error>;
+    func list-files(handle: u32, path: string) -> result<list<string>, file-error>;
+    func get-metadata(handle: u32, path: string) -> result<file-metadata, file-error>;
+
+    // Secure storage operations
+    func load-key(handle: u32, key: list<u8>) -> result<_, file-error>;
+    func remove-key(handle: u32) -> result<_, file-error>;
+    func is-encrypted(handle: u32, path: string) -> result<bool, file-error>;
+}
+
+world file-impl {
+    export file;
+} 
