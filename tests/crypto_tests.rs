@@ -1,5 +1,8 @@
 use elastic::crypto::{CryptoContext, KeyType, Algorithm, CryptoError};
-use rsa::{RsaPrivateKey, RsaPublicKey, Pkcs1v15Encrypt};
+use rsa::{
+    RsaPrivateKey, RsaPublicKey,
+    pkcs8::{EncodePrivateKey, EncodePublicKey},
+};
 use rand::rngs::OsRng;
 
 #[test]
@@ -37,8 +40,8 @@ fn test_public_key_operations() {
     let public_key = RsaPublicKey::from(&private_key);
     
     // Export keys
-    let private_key_bytes = private_key.to_pkcs8_der().unwrap();
-    let public_key_bytes = public_key.to_public_key_der().unwrap();
+    let private_key_bytes = private_key.to_pkcs8_der().unwrap().as_bytes().to_vec();
+    let public_key_bytes = public_key.to_public_key_der().unwrap().as_bytes().to_vec();
     
     // Load keys
     let private_handle = crypto.load_key(&private_key_bytes, KeyType::Asymmetric, Algorithm::Rsa2048).unwrap();
