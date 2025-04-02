@@ -19,6 +19,15 @@ This repository contains the implementation of the Hardware Abstraction Layer (H
 - AES-GCM encryption for secure storage
 - WebAssembly Interface Types (WIT) support for language interoperability
 
+### Crypto Interface
+- Symmetric encryption/decryption (AES-256-GCM)
+- Asymmetric encryption/decryption (RSA-2048, RSA-4096)
+- Digital signing and verification
+- Cryptographic hashing (SHA-256, SHA-512)
+- Message Authentication Code (HMAC-SHA-256)
+- Key management and context handling
+- WebAssembly Interface Types (WIT) support for language interoperability
+
 ## WIT Interface Support
 
 ### Clock Interface (clock.wit)
@@ -105,6 +114,64 @@ world file-impl {
 }
 ```
 
+### Crypto Interface (crypto.wit)
+```wit
+package elastic:crypto@0.1.0;
+
+interface types {
+    variant crypto-error {
+        invalid-key(string),
+        invalid-algorithm(string),
+        encryption-error(string),
+        decryption-error(string),
+        signing-error(string),
+        verification-error(string),
+        hashing-error(string),
+        mac-error(string),
+    }
+
+    enum key-type {
+        symmetric,
+        asymmetric,
+    }
+
+    enum algorithm {
+        aes-256-gcm,
+        rsa-2048,
+        rsa-4096,
+        sha-256,
+        sha-512,
+        hmac-sha-256,
+    }
+}
+
+interface crypto {
+    use types.{crypto-error, key-type, algorithm};
+
+    // Key and algorithm context management
+    load-key: func(key: list<u8>, key-type: key-type, algorithm: algorithm) -> result<u32, crypto-error>;
+    unload-key: func(handle: u32) -> result<_, crypto-error>;
+
+    // Public key operations
+    public-key-encrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+    public-key-decrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+    sign: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+    verify: func(handle: u32, data: list<u8>, signature: list<u8>) -> result<bool, crypto-error>;
+
+    // Symmetric operations
+    symmetric-encrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+    symmetric-decrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+
+    // Hashing and MAC
+    hash: func(algorithm: algorithm, data: list<u8>) -> result<list<u8>, crypto-error>;
+    calculate-mac: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+}
+
+world crypto-impl {
+    export crypto;
+}
+```
+
 ## Usage Examples
 
 ### Clock Interface
@@ -166,9 +233,48 @@ assert_eq!(decrypted, secret_data);
 fs.close_container(handle).unwrap();
 ```
 
+### Crypto Interface
+
+```rust
+use elastic::crypto::{CryptoContext, KeyType, Algorithm};
+
+let crypto = CryptoContext::new();
+
+// Symmetric encryption example
+let key = vec![1u8; 32]; // Use a secure key in production
+let handle = crypto.load_key(&key, KeyType::Symmetric, Algorithm::Aes256Gcm).unwrap();
+
+let data = b"Secret message";
+let encrypted = crypto.symmetric_encrypt(handle, data).unwrap();
+let decrypted = crypto.symmetric_decrypt(handle, &encrypted).unwrap();
+assert_eq!(decrypted, data);
+
+// Public key operations example
+let mut rng = rand::thread_rng();
+let private_key = rsa::RsaPrivateKey::new(&mut rng, 2048).unwrap();
+let public_key = rsa::RsaPublicKey::from(&private_key);
+
+let private_handle = crypto.load_key(&private_key.to_pkcs8_der().unwrap(), 
+    KeyType::Asymmetric, Algorithm::Rsa2048).unwrap();
+let public_handle = crypto.load_key(&public_key.to_public_key_der().unwrap(), 
+    KeyType::Asymmetric, Algorithm::Rsa2048).unwrap();
+
+let encrypted = crypto.public_key_encrypt(public_handle, data).unwrap();
+let decrypted = crypto.public_key_decrypt(private_handle, &encrypted).unwrap();
+assert_eq!(decrypted, data);
+
+// Hashing example
+let hash = crypto.hash(Algorithm::Sha256, data).unwrap();
+assert_eq!(hash.len(), 32);
+
+// MAC example
+let mac = crypto.calculate_mac(handle, data).unwrap();
+assert_eq!(mac.len(), 32);
+```
+
 ## Testing
 
-The project includes comprehensive test suites for both interfaces:
+The project includes comprehensive test suites for all interfaces:
 
 ### Clock Interface Tests
 ```bash
@@ -180,12 +286,21 @@ The project includes comprehensive test suites for both interfaces:
 ./tests/run_file_tests.sh
 ```
 
+### Crypto Interface Tests
+```bash
+./tests/run_crypto_tests.sh
+```
+
 ## Dependencies
 
-- Rust 1.70.0 or later
-- wit-bindgen 0.11.0
-- aes-gcm 0.10.3 (for file encryption)
-- tempfile 3.8.1 (for testing)
+- wit-bindgen: WebAssembly Interface Types binding generator
+- aes-gcm: AES-GCM encryption implementation
+- rsa: RSA encryption implementation
+- sha2: SHA-256 and SHA-512 hashing
+- hmac: HMAC implementation
+- rand: Random number generation
+- thiserror: Error handling utilities
+- tempfile: Temporary file handling for tests
 
 ## Building
 

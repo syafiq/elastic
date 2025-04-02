@@ -1,0 +1,54 @@
+package elastic:crypto@0.1.0;
+
+interface types {
+    variant crypto-error {
+        invalid-key(string),
+        invalid-algorithm(string),
+        encryption-error(string),
+        decryption-error(string),
+        signing-error(string),
+        verification-error(string),
+        hashing-error(string),
+        mac-error(string),
+    }
+
+    enum key-type {
+        symmetric,
+        asymmetric,
+    }
+
+    enum algorithm {
+        aes-256-gcm,
+        rsa-2048,
+        rsa-4096,
+        sha-256,
+        sha-512,
+        hmac-sha-256,
+    }
+}
+
+interface crypto {
+    use types.{crypto-error, key-type, algorithm};
+
+    // Key and algorithm context management
+    load-key: func(key: list<u8>, key-type: key-type, algorithm: algorithm) -> result<u32, crypto-error>;
+    unload-key: func(handle: u32) -> result<_, crypto-error>;
+
+    // Public key operations
+    public-key-encrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+    public-key-decrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+    sign: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+    verify: func(handle: u32, data: list<u8>, signature: list<u8>) -> result<bool, crypto-error>;
+
+    // Symmetric operations
+    symmetric-encrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+    symmetric-decrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+
+    // Hashing and MAC
+    hash: func(algorithm: algorithm, data: list<u8>) -> result<list<u8>, crypto-error>;
+    calculate-mac: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+}
+
+world crypto-impl {
+    export crypto;
+} 
