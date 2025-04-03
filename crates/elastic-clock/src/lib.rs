@@ -1,17 +1,17 @@
+mod common;
+pub use common::*;
+
 #[cfg(feature = "linux")]
 mod linux;
+
 #[cfg(feature = "sev")]
 mod sev;
 
-mod common;
-
 #[cfg(feature = "linux")]
-use linux as implementation;
-#[cfg(feature = "sev")]
-use sev as implementation;
+pub use linux::*;
 
-pub use implementation::*;
-pub use common::*;
+#[cfg(feature = "sev")]
+pub use sev::*;
 
 pub mod clock;
 

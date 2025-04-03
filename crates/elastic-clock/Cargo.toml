@@ -11,6 +11,7 @@ thiserror = "1.0"
 tokio = { version = "1.0", features = ["full"] }
 libc = "0.2"
 time = "0.3"
+sev = { version = "6.0", default-features = false, features = ["snp"] }  # SEV-SNP support
 
 [dev-dependencies]
 tokio-test = "0.4"
@@ -23,4 +24,4 @@ path = "tests/clock_tests.rs"
 [features]
 default = ["linux"]
 linux = []
-sev = []
+sev = []  # SEV-SNP support using sev crate
