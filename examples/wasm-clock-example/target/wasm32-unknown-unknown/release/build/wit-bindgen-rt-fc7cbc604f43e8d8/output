@@ -1,0 +1,2 @@
+cargo:rustc-link-lib=static=wit_bindgen_cabi_realloc0_41_0
+cargo:rustc-link-search=native=/home/ubuntu/wasm-clock-example/target/wasm32-unknown-unknown/release/build/wit-bindgen-rt-fc7cbc604f43e8d8/out

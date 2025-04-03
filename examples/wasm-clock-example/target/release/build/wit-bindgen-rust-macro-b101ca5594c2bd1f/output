@@ -1,0 +1,2 @@
+cargo:rerun-if-changed=build.rs
+cargo:rustc-env=DEBUG_OUTPUT_DIR=/home/ubuntu/wasm-clock-example/target/release/build/wit-bindgen-rust-macro-b101ca5594c2bd1f/out

@@ -1,0 +1,3 @@
+cargo::rustc-check-cfg=cfg(host)
+cargo::rustc-check-cfg=cfg(guest)
+cargo:rustc-cfg=guest

@@ -3,11 +3,13 @@ members = [
     "crates/elastic-clock",
     "crates/elastic-crypto",
     "crates/elastic-file",
-    "crates/elastic-tls"
+    "crates/elastic-tls",
+    "example-clock-app",
 ]
+resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
-description = "ELASTIC project workspace" 
+authors = ["Elastic Security"]
+description = "ELASTIC: Extensible Library for Attestation, Security, and Trusted I/O in the Cloud" 
