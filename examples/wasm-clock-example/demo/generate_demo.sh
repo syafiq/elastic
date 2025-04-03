@@ -50,7 +50,7 @@ sleep 2
 # Step 1: Show the source code
 echo "Step 1: Source Code"
 echo "==================="
-show_file "../../src/lib.rs" || exit 1
+show_file "../src/lib.rs" || exit 1
 sleep 2
 
 # Step 2: Check SEV support
@@ -89,10 +89,14 @@ else
     # Step 3: Build on non-SEV machine
     echo "Step 3: Build WASM Module"
     echo "========================"
-    run_command "cd ../.. && cargo build --target wasm32-unknown-unknown --release"
+    run_command "cd .. && cargo build --target wasm32-unknown-unknown --release"
     echo "Building..."
-    sleep 2
-    if [ ! -f "../../target/wasm32-unknown-unknown/release/wasm_clock_example.wasm" ]; then
+    # Actually run the build command
+    if ! (cd .. && cargo build --target wasm32-unknown-unknown --release); then
+        echo "Error: WASM module not built successfully"
+        exit 1
+    fi
+    if [ ! -f "../target/wasm32-unknown-unknown/release/wasm_clock_example.wasm" ]; then
         echo "Error: WASM module not built successfully"
         exit 1
     fi
@@ -103,7 +107,12 @@ else
     # Step 4: Run on build machine
     echo "Step 4: Run on Build Machine"
     echo "==========================="
-    run_command "cd ../.. && wasmtime run target/wasm32-unknown-unknown/release/wasm_clock_example.wasm"
+    run_command "cd .. && wasmtime run target/wasm32-unknown-unknown/release/wasm_clock_example.wasm"
+    # Actually run the wasm module
+    if ! (cd .. && wasmtime run target/wasm32-unknown-unknown/release/wasm_clock_example.wasm); then
+        echo "Error: Failed to run WASM module"
+        exit 1
+    fi
     echo "✓ WASM module executed successfully on build machine"
     echo
     sleep 2
