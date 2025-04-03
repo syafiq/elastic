@@ -1,0 +1,21 @@
+[package]
+name = "elastic-clock"
+version = "0.1.0"
+edition = "2021"
+authors = ["ELASTIC Team"]
+description = "Clock implementation for ELASTIC project"
+
+[dependencies]
+wit-bindgen = "0.41.0"
+thiserror = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+libc = "0.2"
+time = "0.3"
+
+[dev-dependencies]
+tokio-test = "0.4"
+anyhow = "1.0"
+
+[[test]]
+name = "clock_tests"
+path = "tests/clock_tests.rs"

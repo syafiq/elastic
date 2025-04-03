@@ -1,0 +1,24 @@
+[package]
+name = "elastic-crypto"
+version = "0.1.0"
+edition = "2021"
+authors = ["ELASTIC Team"]
+description = "Cryptographic operations implementation for ELASTIC project"
+
+[dependencies]
+wit-bindgen = "0.41.0"
+thiserror = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+libc = "0.2"
+async-trait = "0.1"
+aes-gcm = "0.10"
+rand = "0.8"
+rsa = { version = "0.9", features = ["sha2"] }
+sha2 = "0.10"
+hmac = "0.12"
+base64 = "0.21"
+
+[dev-dependencies]
+tokio-test = "0.4"
+anyhow = "1.0"
+tempfile = "3.2" 
