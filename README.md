@@ -4,15 +4,48 @@ This repository contains the implementation of secure interfaces for the ELASTIC
 
 ## Project Structure
 
-The project is organized into several crates, each providing specific functionality:
+The project is organized into several crates, each providing specific functionality with support for different platforms:
 
 ```
 crates/
 ├── elastic-clock/      # Secure time operations
+│   ├── src/
+│   │   ├── linux/     # Linux-specific implementation
+│   │   └── sev/       # SEV-SNP specific implementation
+│   └── tests/
+│       ├── linux/     # Linux-specific tests
+│       └── sev/       # SEV-SNP specific tests
 ├── elastic-crypto/     # Cryptographic operations
+│   ├── src/
+│   │   ├── linux/     # Linux-specific implementation
+│   │   └── sev/       # SEV-SNP specific implementation (in progress)
+│   └── tests/
+│       ├── linux/     # Linux-specific tests
+│       └── sev/       # SEV-SNP specific tests
 ├── elastic-file/       # Secure file operations
+│   ├── src/
+│   │   ├── linux/     # Linux-specific implementation
+│   │   └── sev/       # SEV-SNP specific implementation (in progress)
+│   └── tests/
+│       ├── linux/     # Linux-specific tests
+│       └── sev/       # SEV-SNP specific tests
 └── elastic-tls/        # Secure communication
+    ├── src/
+    │   ├── linux/     # Linux-specific implementation (planned)
+    │   └── sev/       # SEV-SNP specific implementation (planned)
+    └── tests/
+        ├── linux/     # Linux-specific tests
+        └── sev/       # SEV-SNP specific tests
 ```
+
+Each crate follows a similar structure:
+- `src/`: Contains the implementation code
+  - `linux/`: Linux-specific implementation
+  - `sev/`: SEV-SNP specific implementation
+- `tests/`: Contains test code
+  - `linux/`: Linux-specific tests
+  - `sev/`: SEV-SNP specific tests
+- `wit/`: Contains WebAssembly Interface Types definitions
 
 ## Features
 
