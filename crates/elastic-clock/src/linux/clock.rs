@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tokio::time::sleep as tokio_sleep;
 
 use super::{ClockConfig, ClockType};
 
@@ -79,11 +78,11 @@ impl ClockManager {
         Ok(resolution)
     }
 
-    pub async fn sleep(&self, handle: u32, duration: u64) -> Result<(), String> {
+    pub fn sleep(&self, handle: u32, duration: u64) -> Result<(), String> {
         let clocks = self.clocks.lock().map_err(|e| e.to_string())?;
         let _clock = clocks.get(&handle).ok_or_else(|| "Clock not found".to_string())?;
 
-        tokio_sleep(Duration::from_nanos(duration)).await;
+        std::thread::sleep(Duration::from_nanos(duration));
         Ok(())
     }
 

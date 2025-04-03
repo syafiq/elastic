@@ -83,8 +83,8 @@ impl ClockContext {
             .map_err(|e| ClockError::OperationFailed(e))
     }
 
-    pub async fn sleep(&self, handle: u32, duration: u64) -> Result<(), ClockError> {
-        self.manager.sleep(handle, duration).await
+    pub fn sleep(&self, handle: u32, duration: u64) -> Result<(), ClockError> {
+        self.manager.sleep(handle, duration)
             .map_err(|e| ClockError::OperationFailed(e))
     }
 
