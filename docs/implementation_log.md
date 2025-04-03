@@ -3,6 +3,20 @@
 ## Project Overview
 ELASTIC (Enclave Layer for Secure Time, Information, and Cryptography) is a Hardware Abstraction Layer (HAL) for AMD SEV-SNP VMs. The project aims to provide secure abstractions for time, file operations, and cryptographic functions in a SEV-SNP environment.
 
+## Platform Support Matrix
+
+| Interface | Linux | SEV-SNP | TDX | Notes |
+|-----------|-------|---------|-----|-------|
+| Clock     | ✅    | ✅      | ❌  | SEV-SNP uses TSC, Linux uses system calls |
+| File      | ✅    | ⏳      | ❌  | SEV-SNP implementation in progress |
+| Crypto    | ✅    | ⏳      | ❌  | SEV-SNP implementation in progress |
+| TLS       | ⏳    | ⏳      | ❌  | Planning phase for both platforms |
+
+Legend:
+- ✅: Implemented and tested
+- ⏳: In progress or planned
+- ❌: Not implemented
+
 ## Implementation Progress
 
 ### Clock Interface
@@ -24,6 +38,26 @@ ELASTIC (Enclave Layer for Secure Time, Information, and Cryptography) is a Hard
   - Tested current time retrieval
   - Tested monotonic clock functionality
   - Tested timezone handling
+  - All tests passing successfully
+
+### SEV-SNP Clock Implementation
+- ✅ Implemented SEV-SNP specific clock functionality
+  - Added `sev` crate dependency with `snp` feature
+  - Created SEV-SNP specific clock implementation in `src/sev/clock.rs`
+  - Implemented secure time measurement using TSC
+  - Added SEV-SNP platform verification
+- ✅ Implemented clock types for SEV-SNP
+  - System clock: Uses TSC with wallclock time
+  - Monotonic clock: Uses TSC directly
+  - Process/Thread clocks: Uses TSC with offsets
+- ✅ Added SEV-SNP specific features
+  - High-resolution support based on TSC frequency
+  - Secure time measurement through SEV-SNP protected RDTSC
+  - Platform status verification through SEV firmware
+- ✅ Created comprehensive tests
+  - Tested clock creation and destruction
+  - Tested time retrieval for different clock types
+  - Tested resolution and elapsed time calculations
   - All tests passing successfully
 
 ### File Interface
@@ -219,6 +253,7 @@ pkcs8 = "0.10.2"        # For PKCS#8 key handling
 sha2 = "0.10.8"         # For SHA-256 hashing
 hmac = "0.12.1"         # For HMAC operations
 thiserror = "1.0"       # For error handling
+sev = { version = "6.0", default-features = false, features = ["snp"] }  # SEV-SNP support
 
 [dev-dependencies]
 tempfile = "3.8.1"      # For temporary file handling in tests
@@ -231,6 +266,114 @@ tempfile = "3.8.1"      # For temporary file handling in tests
 - Started Crypto Interface implementation
 - Fixed dependencies and compilation issues
 - Added implementation log
+- Added SEV-SNP clock implementation
+  - Implemented secure time measurement using TSC
+  - Added SEV-SNP platform verification
+  - Created comprehensive tests
+  - Updated implementation log
+
+## Next Session Plan
+1. Fix Crypto Interface compilation issues
+2. Complete Crypto Interface tests
+3. Consider implementing standard versions
+4. Update documentation with all changes 
+
+### Technical Details
+1. SEV-SNP Clock Implementation:
+   - Uses `sev` crate for SEV-SNP platform verification
+   - Implements secure time measurement using RDTSC
+   - Maintains TSC-based timestamps for different clock types
+   - Provides high-resolution support based on TSC frequency
+
+2. Clock Types:
+   - System Clock: Uses TSC with wallclock time (TODO: implement proper wallclock time retrieval)
+   - Monotonic Clock: Uses TSC directly for secure monotonic time
+   - Process/Thread Clocks: Uses TSC with process/thread specific offsets
+
+3. Security Features:
+   - RDTSC is protected in SEV-SNP environment
+   - Platform status verification through SEV firmware
+   - Secure time measurement through TSC
+
+4. TODOs and Future Improvements:
+   - Implement proper wallclock time retrieval through SEV-SNP mechanisms
+   - Get TSC frequency from a more reliable source
+   - Implement SEV-SNP specific sleep using TSC
+   - Add more SEV-SNP specific error handling
+
+## Questions & Decisions
+1. Q: Should we implement standard (non-SEV) versions of these interfaces?
+   A: Yes, would need new implementations for:
+   - Clock: Standard system time functions
+     - Use `std::time` for time operations
+     - Implement standard monotonic clock
+     - Use system timezone functions
+   - File: Regular file system operations
+     - Use `std::fs` for file operations
+     - Implement software-based encryption
+     - Use standard file metadata
+   - Crypto: Standard cryptographic libraries
+     - Use standard cryptographic libraries
+     - Implement software-based key management
+     - Use standard random number generators
+   
+   Suggested structure:
+   ```
+   src/
+   ├── sev/           # SEV-SNP specific implementations
+   │   ├── clock.rs   # SEV-SNP secure time
+   │   ├── file.rs    # SEV-SNP secure files
+   │   └── crypto.rs  # SEV-SNP secure crypto
+   ├── standard/      # Regular environment implementations
+   │   ├── clock.rs   # Standard time functions
+   │   ├── file.rs    # Standard file operations
+   │   └── crypto.rs  # Standard crypto libraries
+   └── lib.rs         # Exports appropriate implementations
+   ```
+
+2. Q: How to handle environment detection?
+   A: We could use:
+   - Compile-time features to select implementation
+   - Runtime detection of SEV-SNP environment
+   - Configuration file to specify implementation
+
+3. Q: How to maintain API consistency between implementations?
+   A: We should:
+   - Use the same WIT interfaces for both implementations
+   - Ensure error types are consistent
+   - Maintain similar function signatures
+   - Document differences in behavior
+
+## Dependencies
+Current dependencies in Cargo.toml:
+```toml
+[dependencies]
+wit-bindgen = "0.11.0"  # For WIT interface bindings
+aes-gcm = "0.10.3"      # For AES-GCM encryption
+rand = "0.8.5"          # For random number generation
+rsa = { version = "0.9.6", features = ["sha2", "pem"] }  # For RSA operations
+pkcs8 = "0.10.2"        # For PKCS#8 key handling
+sha2 = "0.10.8"         # For SHA-256 hashing
+hmac = "0.12.1"         # For HMAC operations
+thiserror = "1.0"       # For error handling
+sev = { version = "6.0", default-features = false, features = ["snp"] }  # SEV-SNP support
+
+[dev-dependencies]
+tempfile = "3.8.1"      # For temporary file handling in tests
+```
+
+## Git History
+- Initial commit: Project setup
+- Added Clock Interface implementation
+- Added File Interface implementation
+- Started Crypto Interface implementation
+- Fixed dependencies and compilation issues
+- Added implementation log
+- Added SEV-SNP clock implementation
+  - Implemented secure time measurement using TSC
+  - Added SEV-SNP platform verification
+  - Created comprehensive tests
+  - Updated implementation log
 
 ## Next Session Plan
 1. Fix Crypto Interface compilation issues
