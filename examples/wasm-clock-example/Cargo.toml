@@ -3,11 +3,9 @@ name = "wasm-clock-example"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-crate-type = ["cdylib", "bin"]
+[[bin]]
+name = "wasm_clock_example"
+path = "src/main.rs"
 
 [dependencies]
 elastic-clock = { path = "../../crates/elastic-clock", default-features = false, features = ["linux"] }
-
-[target.wasm32-wasip1]
-rustflags = ["-C", "target-feature=+atomics,+bulk-memory,+mutable-globals"]
