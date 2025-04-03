@@ -1,4 +1,4 @@
-# ELASTIC (Enclave Layer for Secure Time, Information, and Cryptography)
+# ELASTIC (Efficient, Lightweight And Secure orchesTration for reliable servICes)
 
 This repository contains the implementation of secure interfaces for the ELASTIC project, focusing on providing secure and efficient operations in WebAssembly environments.
 
