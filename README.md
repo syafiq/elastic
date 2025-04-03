@@ -49,6 +49,20 @@ crates/
 - Connection information and peer certificate verification
 - WebAssembly Interface Types (WIT) support for language interoperability
 
+## Platform Support
+
+| Interface | Linux | SEV-SNP | TDX | Notes |
+|-----------|-------|---------|-----|-------|
+| Clock     | ✅    | ✅      | ❌  | SEV-SNP uses TSC, Linux uses system calls |
+| File      | ✅    | ⏳      | ❌  | SEV-SNP implementation in progress |
+| Crypto    | ✅    | ⏳      | ❌  | SEV-SNP implementation in progress |
+| TLS       | ⏳    | ⏳      | ❌  | Planning phase for both platforms |
+
+Legend:
+- ✅: Implemented and tested
+- ⏳: In progress or planned
+- ❌: Not implemented
+
 ## Getting Started
 
 ### Prerequisites
