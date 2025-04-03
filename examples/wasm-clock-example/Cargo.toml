@@ -7,4 +7,4 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-elastic-clock = { path = "/home/ubuntu/elastic/crates/elastic-clock", default-features = false, features = ["linux"] }
+elastic-clock = { path = "../../crates/elastic-clock", default-features = false, features = ["linux"] }
