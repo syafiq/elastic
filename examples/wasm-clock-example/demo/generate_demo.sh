@@ -161,7 +161,7 @@ else
     echo "Step 5: Transfer Instructions"
     echo "==========================="
     echo "To run on SEV machine (34.253.195.127):"
-    echo "1. scp target/wasm32-unknown-unknown/release/wasm_clock_example.wasm aws:~/"
+    echo "1. scp ../target/wasm32-unknown-unknown/release/wasm_clock_example.wasm aws:~/"
     echo "2. ssh aws"
     echo "3. wasmtime run wasm_clock_example.wasm"
     echo
