@@ -1,17 +1,29 @@
-# ELASTIC HAL Implementation
+# ELASTIC (Enclave Layer for Secure Time, Information, and Cryptography)
 
-This repository contains the implementation of the Hardware Abstraction Layer (HAL) for the ELASTIC project, focusing on providing a secure and efficient interface for hardware access in WebAssembly environments.
+This repository contains the implementation of secure interfaces for the ELASTIC project, focusing on providing secure and efficient operations in WebAssembly environments.
+
+## Project Structure
+
+The project is organized into several crates, each providing specific functionality:
+
+```
+crates/
+├── elastic-clock/      # Secure time operations
+├── elastic-crypto/     # Cryptographic operations
+├── elastic-file/       # Secure file operations
+└── elastic-tls/        # Secure communication
+```
 
 ## Features
 
-### Clock Interface
+### Clock Interface (`elastic-clock`)
 - Current time reading in seconds since UNIX epoch
 - Timezone information retrieval
 - Monotonic clock for precise time measurements
 - Error handling for system time and timezone operations
 - WebAssembly Interface Types (WIT) support for language interoperability
 
-### File Interface
+### File Interface (`elastic-file`)
 - Secure file operations with container-based isolation
 - Support for both regular and encrypted file storage
 - File metadata access and manipulation
@@ -19,7 +31,7 @@ This repository contains the implementation of the Hardware Abstraction Layer (H
 - AES-GCM encryption for secure storage
 - WebAssembly Interface Types (WIT) support for language interoperability
 
-### Crypto Interface
+### Crypto Interface (`elastic-crypto`)
 - Symmetric encryption/decryption (AES-256-GCM)
 - Asymmetric encryption/decryption (RSA-2048)
 - Digital signing and verification with SHA-256 hashing
@@ -28,7 +40,7 @@ This repository contains the implementation of the Hardware Abstraction Layer (H
 - Key management and context handling
 - WebAssembly Interface Types (WIT) support for language interoperability
 
-### TLS Interface
+### TLS Interface (`elastic-tls`)
 - Secure communication using TLS 1.2 and 1.3
 - Support for multiple cipher suites (AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305)
 - Certificate and key management
@@ -37,9 +49,36 @@ This repository contains the implementation of the Hardware Abstraction Layer (H
 - Connection information and peer certificate verification
 - WebAssembly Interface Types (WIT) support for language interoperability
 
+## Getting Started
+
+### Prerequisites
+- Rust (latest stable version)
+- WebAssembly tools (wasm-bindgen, wasm-pack)
+- OpenSSL or equivalent TLS library
+
+### Building
+```bash
+# Build all crates
+cargo build
+
+# Build specific crate
+cargo build -p elastic-tls
+```
+
+### Testing
+```bash
+# Run all tests
+cargo test
+
+# Run tests for specific crate
+cargo test -p elastic-tls
+```
+
 ## WIT Interface Support
 
-### Clock Interface (clock.wit)
+Each crate provides a WebAssembly Interface Types (WIT) definition for language interoperability. The interfaces are located in the `wit/` directory of each crate.
+
+### Clock Interface (`clock.wit`)
 ```wit
 package elastic:clock@0.1.0;
 
@@ -64,7 +103,7 @@ world clock-impl {
 }
 ```
 
-### File Interface (file.wit)
+### File Interface (`file.wit`)
 ```wit
 package elastic:file@0.1.0;
 
@@ -98,24 +137,23 @@ interface types {
         file-type: file-type,
         created: u64,
         modified: u64,
-        accessed: u64,
-        permissions: u32,
     }
 }
 
 interface file {
     use types.{file-error, file-mode, file-type, file-metadata};
 
-    open-container: func(path: string, mode: file-mode) -> result<u32, file-error>;
-    close-container: func(handle: u32) -> result<_, file-error>;
-    read-file: func(handle: u32, path: string) -> result<list<u8>, file-error>;
-    write-file: func(handle: u32, path: string, data: list<u8>) -> result<_, file-error>;
-    delete-file: func(handle: u32, path: string) -> result<_, file-error>;
-    list-files: func(handle: u32, path: string) -> result<list<string>, file-error>;
-    get-metadata: func(handle: u32, path: string) -> result<file-metadata, file-error>;
-    load-key: func(handle: u32, key: list<u8>) -> result<_, file-error>;
-    remove-key: func(handle: u32) -> result<_, file-error>;
-    is-encrypted: func(handle: u32, path: string) -> result<bool, file-error>;
+    open: func(path: string, mode: file-mode) -> result<u32, file-error>;
+    close: func(handle: u32) -> result<_, file-error>;
+    read: func(handle: u32, size: u32) -> result<list<u8>, file-error>;
+    write: func(handle: u32, data: list<u8>) -> result<_, file-error>;
+    seek: func(handle: u32, offset: i64, whence: u32) -> result<u64, file-error>;
+    tell: func(handle: u32) -> result<u64, file-error>;
+    stat: func(path: string) -> result<file-metadata, file-error>;
+    mkdir: func(path: string) -> result<_, file-error>;
+    rmdir: func(path: string) -> result<_, file-error>;
+    unlink: func(path: string) -> result<_, file-error>;
+    readdir: func(path: string) -> result<list<string>, file-error>;
 }
 
 world file-impl {
@@ -123,54 +161,55 @@ world file-impl {
 }
 ```
 
-### Crypto Interface (crypto.wit)
+### Crypto Interface (`crypto.wit`)
 ```wit
 package elastic:crypto@0.1.0;
 
 interface types {
     variant crypto-error {
-        invalid-key,
-        encryption-failed,
-        decryption-failed,
-        signing-failed,
-        verification-failed,
-        mac-failed,
-        unsupported-algorithm,
+        invalid-key(string),
+        invalid-iv(string),
+        encryption-failed(string),
+        decryption-failed(string),
+        signing-failed(string),
+        verification-failed(string),
+        hashing-failed(string),
+        hmac-failed(string),
     }
 
-    enum key-type {
-        symmetric,
-        asymmetric,
+    enum hash-algorithm {
+        sha256,
+        sha512,
     }
 
-    enum algorithm {
-        aes-256-gcm,
-        rsa-2048,
-        sha-256,
-        sha-512,
+    enum cipher-algorithm {
+        aes256gcm,
+        chacha20poly1305,
+    }
+
+    enum signature-algorithm {
+        rsa2048,
+        ecdsa256,
     }
 }
 
 interface crypto {
-    use types.{crypto-error, key-type, algorithm};
+    use types.{crypto-error, hash-algorithm, cipher-algorithm, signature-algorithm};
 
-    // Key and algorithm context management
-    load-key: func(key: list<u8>, key-type: key-type, algorithm: algorithm) -> result<u32, crypto-error>;
-    unload-key: func(handle: u32) -> result<_, crypto-error>;
+    create-context: func() -> result<u32, crypto-error>;
+    destroy-context: func(handle: u32) -> result<_, crypto-error>;
 
-    // Public key operations
-    public-key-encrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
-    public-key-decrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
-    sign: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
-    verify: func(handle: u32, data: list<u8>, signature: list<u8>) -> result<bool, crypto-error>;
+    generate-key: func(handle: u32, algorithm: cipher-algorithm) -> result<list<u8>, crypto-error>;
+    generate-iv: func(handle: u32, algorithm: cipher-algorithm) -> result<list<u8>, crypto-error>;
 
-    // Symmetric operations
-    symmetric-encrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
-    symmetric-decrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+    encrypt: func(handle: u32, data: list<u8>, key: list<u8>, iv: list<u8>) -> result<list<u8>, crypto-error>;
+    decrypt: func(handle: u32, data: list<u8>, key: list<u8>, iv: list<u8>) -> result<list<u8>, crypto-error>;
 
-    // Hashing and MAC
-    hash: func(algorithm: algorithm, data: list<u8>) -> result<list<u8>, crypto-error>;
-    calculate-mac: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+    sign: func(handle: u32, data: list<u8>, key: list<u8>, algorithm: signature-algorithm) -> result<list<u8>, crypto-error>;
+    verify: func(handle: u32, data: list<u8>, signature: list<u8>, key: list<u8>, algorithm: signature-algorithm) -> result<bool, crypto-error>;
+
+    hash: func(handle: u32, data: list<u8>, algorithm: hash-algorithm) -> result<list<u8>, crypto-error>;
+    hmac: func(handle: u32, data: list<u8>, key: list<u8>, algorithm: hash-algorithm) -> result<list<u8>, crypto-error>;
 }
 
 world crypto-impl {
@@ -178,20 +217,20 @@ world crypto-impl {
 }
 ```
 
-### TLS Interface (tls.wit)
+### TLS Interface (`tls.wit`)
 ```wit
 package elastic:tls@0.1.0;
 
 interface types {
     variant tls-error {
-        invalid-certificate,
-        invalid-key,
-        connection-failed,
-        handshake-failed,
-        write-failed,
-        read-failed,
-        unsupported-protocol,
-        unsupported-cipher,
+        invalid-certificate(string),
+        invalid-key(string),
+        connection-failed(string),
+        handshake-failed(string),
+        write-failed(string),
+        read-failed(string),
+        unsupported-protocol(string),
+        unsupported-cipher(string),
     }
 
     enum tls-version {
@@ -216,25 +255,20 @@ interface types {
 interface tls {
     use types.{tls-error, tls-version, cipher-suite, tls-config};
 
-    // Context and configuration management
     create-context: func(config: tls-config) -> result<u32, tls-error>;
     destroy-context: func(handle: u32) -> result<_, tls-error>;
 
-    // Certificate and key management
     load-certificate: func(handle: u32, cert: list<u8>) -> result<_, tls-error>;
     load-private-key: func(handle: u32, key: list<u8>) -> result<_, tls-error>;
     load-ca-certificates: func(handle: u32, certs: list<u8>) -> result<_, tls-error>;
 
-    // Connection management
     connect: func(handle: u32, hostname: string, port: u16) -> result<u32, tls-error>;
     accept: func(handle: u32, port: u16) -> result<u32, tls-error>;
     close: func(conn: u32) -> result<_, tls-error>;
 
-    // Data transfer
     write: func(conn: u32, data: list<u8>) -> result<u32, tls-error>;
     read: func(conn: u32, max-size: u32) -> result<list<u8>, tls-error>;
 
-    // Connection information
     get-peer-certificate: func(conn: u32) -> result<list<u8>, tls-error>;
     get-protocol-version: func(conn: u32) -> result<tls-version, tls-error>;
     get-cipher-suite: func(conn: u32) -> result<cipher-suite, tls-error>;
@@ -245,197 +279,14 @@ world tls-impl {
 }
 ```
 
-## Usage Examples
+## Contributing
 
-### Clock Interface
-
-```rust
-use elastic::clock::Clock;
-
-let mut clock = Clock::new();
-
-// Read current time
-match clock.read_current_time() {
-    Ok(time) => println!("Current time (seconds since epoch): {}", time),
-    Err(e) => eprintln!("Error reading current time: {}", e),
-}
-
-// Start monotonic clock
-clock.start_monotonic().unwrap();
-
-// ... do some work ...
-
-// Read elapsed time
-match clock.read_monotonic() {
-    Ok(elapsed) => println!("Elapsed time (seconds): {}", elapsed),
-    Err(e) => eprintln!("Error reading monotonic time: {}", e),
-}
-```
-
-### File Interface
-
-```rust
-use elastic::file::{FileSystem, FileMode};
-
-let fs = FileSystem::new();
-
-// Open a container
-let handle = fs.open_container("/path/to/container", FileMode::ReadWrite).unwrap();
-
-// Write a file
-let data = b"Hello, World!";
-fs.write_file(handle, "test.txt", data).unwrap();
-
-// Read the file
-let contents = fs.read_file(handle, "test.txt").unwrap();
-assert_eq!(contents, data);
-
-// Enable encryption
-let key = vec![1u8; 32]; // Use a secure key in production
-fs.load_key(handle, &key).unwrap();
-
-// Write encrypted data
-let secret_data = b"Secret message";
-fs.write_file(handle, "secret.txt", secret_data).unwrap();
-
-// Read encrypted data
-let decrypted = fs.read_file(handle, "secret.txt").unwrap();
-assert_eq!(decrypted, secret_data);
-
-// Close the container
-fs.close_container(handle).unwrap();
-```
-
-### Crypto Interface
-
-```rust
-use elastic::crypto::{CryptoContext, KeyType, Algorithm};
-
-let crypto = CryptoContext::new();
-
-// Symmetric encryption example
-let key = vec![1u8; 32]; // Use a secure key in production
-let handle = crypto.load_key(&key, KeyType::Symmetric, Algorithm::Aes256Gcm).unwrap();
-
-let data = b"Secret message";
-let encrypted = crypto.symmetric_encrypt(handle, data).unwrap();
-let decrypted = crypto.symmetric_decrypt(handle, &encrypted).unwrap();
-assert_eq!(decrypted, data);
-
-// Public key operations example
-let mut rng = OsRng;
-let private_key = RsaPrivateKey::new(&mut rng, 2048).unwrap();
-let public_key = RsaPublicKey::from(&private_key);
-
-// Export keys
-let private_key_der = private_key.to_pkcs8_der().unwrap();
-let public_key_der = public_key.to_public_key_der().unwrap();
-
-// Load keys
-let private_handle = crypto.load_key(&private_key_der, KeyType::Asymmetric, Algorithm::Rsa2048).unwrap();
-let public_handle = crypto.load_key(&public_key_der, KeyType::Asymmetric, Algorithm::Rsa2048).unwrap();
-
-// Encrypt with public key
-let encrypted = crypto.public_key_encrypt(public_handle, data).unwrap();
-let decrypted = crypto.public_key_decrypt(private_handle, &encrypted).unwrap();
-assert_eq!(decrypted, data);
-
-// Sign and verify
-let signature = crypto.sign(private_handle, data).unwrap();
-let verified = crypto.verify(public_handle, data, &signature).unwrap();
-assert!(verified);
-
-// Clean up
-crypto.unload_key(private_handle).unwrap();
-crypto.unload_key(public_handle).unwrap();
-```
-
-### TLS Interface
-
-```rust
-use elastic::tls::{TlsContext, TlsVersion, CipherSuite, TlsConfig};
-
-// Create TLS context with configuration
-let config = TlsConfig {
-    version: TlsVersion::Tls1_3,
-    cipher_suites: vec![
-        CipherSuite::TlsAes256GcmSha384,
-        CipherSuite::TlsChaCha20Poly1305Sha256,
-    ],
-    verify_peer: true,
-    verify_hostname: true,
-};
-
-let tls = TlsContext::new(config).unwrap();
-
-// Load certificates and keys
-tls.load_certificate(&cert_data).unwrap();
-tls.load_private_key(&key_data).unwrap();
-tls.load_ca_certificates(&ca_certs_data).unwrap();
-
-// Client connection example
-let conn = tls.connect("example.com", 443).unwrap();
-tls.write(conn, b"Hello, Server!").unwrap();
-let response = tls.read(conn, 1024).unwrap();
-
-// Server connection example
-let server = tls.accept(8443).unwrap();
-let client_conn = tls.accept(server).unwrap();
-let request = tls.read(client_conn, 1024).unwrap();
-tls.write(client_conn, b"Hello, Client!").unwrap();
-
-// Get connection information
-let peer_cert = tls.get_peer_certificate(client_conn).unwrap();
-let version = tls.get_protocol_version(client_conn).unwrap();
-let cipher = tls.get_cipher_suite(client_conn).unwrap();
-
-// Clean up
-tls.close(client_conn).unwrap();
-tls.close(server).unwrap();
-tls.destroy_context().unwrap();
-```
-
-## Testing
-
-The project includes comprehensive test suites for all interfaces:
-
-### Clock Interface Tests
-```bash
-./tests/run_tests.sh
-```
-
-### File Interface Tests
-```bash
-./tests/run_file_tests.sh
-```
-
-### Crypto Interface Tests
-```bash
-./tests/run_crypto_tests.sh
-```
-
-### TLS Interface Tests
-```bash
-./tests/run_tls_tests.sh
-```
-
-## Dependencies
-
-- wit-bindgen: WebAssembly Interface Types binding generator
-- aes-gcm: AES-GCM encryption implementation
-- rsa: RSA encryption implementation
-- sha2: SHA-256 and SHA-512 hashing
-- hmac: HMAC implementation
-- rand: Random number generation
-- thiserror: Error handling utilities
-- tempfile: Temporary file handling for tests
-
-## Building
-
-```bash
-cargo build
-```
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
