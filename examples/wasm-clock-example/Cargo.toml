@@ -6,6 +6,7 @@ edition = "2021"
 [[bin]]
 name = "wasm_clock_example"
 path = "src/main.rs"
+crate-type = ["cdylib"]
 
 [dependencies]
 elastic-clock = { path = "../../crates/elastic-clock", default-features = false, features = ["linux"] }
