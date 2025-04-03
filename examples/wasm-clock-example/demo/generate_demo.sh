@@ -41,11 +41,51 @@ check_sev_support() {
     fi
 }
 
+# Function to check required tools
+check_required_tools() {
+    local missing_tools=()
+    
+    if ! command -v cargo &> /dev/null; then
+        missing_tools+=("cargo")
+    fi
+    
+    if ! command -v wasmtime &> /dev/null; then
+        missing_tools+=("wasmtime")
+    fi
+    
+    if [ ${#missing_tools[@]} -ne 0 ]; then
+        echo "❌ Missing required tools: ${missing_tools[*]}"
+        echo
+        echo "Please install the missing tools:"
+        for tool in "${missing_tools[@]}"; do
+            case $tool in
+                "cargo")
+                    echo "- Install Rust and Cargo:"
+                    echo "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+                    echo "  source $HOME/.cargo/env"
+                    ;;
+                "wasmtime")
+                    echo "- Install Wasmtime:"
+                    echo "  curl https://github.com/bytecodealliance/wasmtime/releases/download/v16.0.0/wasmtime-v16.0.0-x86_64-linux.tar.xz -L | tar xJ"
+                    echo "  sudo cp wasmtime-v16.0.0-x86_64-linux/wasmtime /usr/local/bin/"
+                    ;;
+            esac
+        done
+        return 1
+    fi
+    return 0
+}
+
 # Clear screen and start demo
 clear
 echo "=== WASM Clock Demo: Build and Run on SEV-SNP ==="
 echo
 sleep 2
+
+# Check for required tools
+if ! check_required_tools; then
+    exit 1
+fi
 
 # Step 1: Show the source code
 echo "Step 1: Source Code"
