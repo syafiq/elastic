@@ -76,6 +76,10 @@ check_required_tools() {
     return 0
 }
 
+# Get the absolute path of the script's directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+WASM_DIR="$(dirname "$SCRIPT_DIR")"
+
 # Clear screen and start demo
 clear
 echo "=== WASM Clock Demo: Build and Run on SEV-SNP ==="
@@ -90,7 +94,7 @@ fi
 # Step 1: Show the source code
 echo "Step 1: Source Code"
 echo "==================="
-show_file "../src/lib.rs" || exit 1
+show_file "$WASM_DIR/src/lib.rs" || exit 1
 sleep 2
 
 # Step 2: Check SEV support
@@ -129,14 +133,14 @@ else
     # Step 3: Build on non-SEV machine
     echo "Step 3: Build WASM Module"
     echo "========================"
-    run_command "cd .. && cargo build --target wasm32-unknown-unknown --release"
+    run_command "cd $WASM_DIR && cargo build --target wasm32-unknown-unknown --release"
     echo "Building..."
     # Actually run the build command
-    if ! (cd .. && cargo build --target wasm32-unknown-unknown --release); then
+    if ! (cd "$WASM_DIR" && cargo build --target wasm32-unknown-unknown --release); then
         echo "Error: WASM module not built successfully"
         exit 1
     fi
-    if [ ! -f "../target/wasm32-unknown-unknown/release/wasm_clock_example.wasm" ]; then
+    if [ ! -f "$WASM_DIR/target/wasm32-unknown-unknown/release/wasm_clock_example.wasm" ]; then
         echo "Error: WASM module not built successfully"
         exit 1
     fi
@@ -147,9 +151,9 @@ else
     # Step 4: Run on build machine
     echo "Step 4: Run on Build Machine"
     echo "==========================="
-    run_command "cd .. && wasmtime run target/wasm32-unknown-unknown/release/wasm_clock_example.wasm"
+    run_command "cd $WASM_DIR && wasmtime run target/wasm32-unknown-unknown/release/wasm_clock_example.wasm"
     # Actually run the wasm module
-    if ! (cd .. && wasmtime run target/wasm32-unknown-unknown/release/wasm_clock_example.wasm); then
+    if ! (cd "$WASM_DIR" && wasmtime run target/wasm32-unknown-unknown/release/wasm_clock_example.wasm); then
         echo "Error: Failed to run WASM module"
         exit 1
     fi
@@ -161,7 +165,7 @@ else
     echo "Step 5: Transfer Instructions"
     echo "==========================="
     echo "To run on SEV machine (34.253.195.127):"
-    echo "1. scp ../target/wasm32-unknown-unknown/release/wasm_clock_example.wasm aws:~/"
+    echo "1. scp $WASM_DIR/target/wasm32-unknown-unknown/release/wasm_clock_example.wasm aws:~/"
     echo "2. ssh aws"
     echo "3. wasmtime run wasm_clock_example.wasm"
     echo
