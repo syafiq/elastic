@@ -315,6 +315,7 @@ dependencies = [
  "hmac",
  "libc",
  "rand",
+ "ring",
  "rsa",
  "sha2",
  "tempfile",
@@ -328,14 +329,11 @@ dependencies = [
 name = "elastic-file"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "async-trait",
  "libc",
  "tempfile",
  "thiserror",
  "tokio",
  "tokio-test",
- "wit-bindgen 0.41.0",
 ]
 
 [[package]]

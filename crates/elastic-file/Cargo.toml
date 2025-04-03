@@ -2,17 +2,19 @@
 name = "elastic-file"
 version = "0.1.0"
 edition = "2021"
-authors = ["ELASTIC Team"]
-description = "File system implementation for ELASTIC project"
+authors = ["Your Name <your.email@example.com>"]
+description = "A file operations library for ELASTIC"
 
 [dependencies]
-wit-bindgen = "0.41.0"
 thiserror = "1.0"
 tokio = { version = "1.0", features = ["full"] }
 libc = "0.2"
-async-trait = "0.1"
 
 [dev-dependencies]
+tempfile = "3.2"
 tokio-test = "0.4"
-anyhow = "1.0"
-tempfile = "3.2" 
+
+[features]
+default = ["linux"]
+linux = []
+sev = [] 

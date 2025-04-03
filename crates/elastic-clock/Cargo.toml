@@ -19,3 +19,8 @@ anyhow = "1.0"
 [[test]]
 name = "clock_tests"
 path = "tests/clock_tests.rs"
+
+[features]
+default = ["linux"]
+linux = []
+sev = []

@@ -1,20 +1,3 @@
-#[cfg(feature = "linux")]
-mod linux;
-#[cfg(feature = "sev")]
-mod sev;
-
-mod common;
-
-#[cfg(feature = "linux")]
-use linux as implementation;
-#[cfg(feature = "sev")]
-use sev as implementation;
-
-pub use implementation::*;
-pub use common::*;
-
-pub mod clock;
-
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -92,4 +75,6 @@ impl ClockContext {
         self.manager.get_elapsed(handle)
             .map_err(|e| ClockError::OperationFailed(e))
     }
-} 
+}
+
+pub mod clock; 

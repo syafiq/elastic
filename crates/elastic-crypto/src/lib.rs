@@ -1,3 +1,18 @@
+#[cfg(feature = "linux")]
+mod linux;
+#[cfg(feature = "sev")]
+mod sev;
+
+mod common;
+
+#[cfg(feature = "linux")]
+use linux as implementation;
+#[cfg(feature = "sev")]
+use sev as implementation;
+
+pub use implementation::*;
+pub use common::*;
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use wit_bindgen::rt::vec::Vec;

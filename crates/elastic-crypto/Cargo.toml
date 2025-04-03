@@ -17,8 +17,14 @@ rsa = { version = "0.9", features = ["sha2"] }
 sha2 = "0.10"
 hmac = "0.12"
 base64 = "0.21"
+ring = "0.17"
 
 [dev-dependencies]
 tokio-test = "0.4"
 anyhow = "1.0"
-tempfile = "3.2" 
+tempfile = "3.2"
+
+[features]
+default = ["linux"]
+linux = []
+sev = [] 
