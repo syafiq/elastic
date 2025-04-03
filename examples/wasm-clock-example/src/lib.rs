@@ -13,6 +13,13 @@ pub extern "C" fn get_current_time() -> u64 {
     time
 }
 
+#[no_mangle]
+pub extern "C" fn _start() {
+    let time = get_current_time();
+    // Print the time in nanoseconds
+    println!("Current time: {} ns", time);
+}
+
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
 }
