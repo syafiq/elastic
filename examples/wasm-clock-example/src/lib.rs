@@ -1,5 +1,4 @@
 use elastic_clock::{clock::ClockManager, ClockConfig, ClockType};
-use std::io::Write;
 
 #[no_mangle]
 pub extern "C" fn get_current_time() -> u64 {
@@ -14,10 +13,9 @@ pub extern "C" fn get_current_time() -> u64 {
     time
 }
 
-fn main() {
-    let time = get_current_time();
-    // Print the time in nanoseconds using WASI
-    writeln!(&mut std::io::stdout(), "Current time: {} ns", time).unwrap();
+#[no_mangle]
+pub extern "C" fn _start() -> u64 {
+    get_current_time()
 }
 
 pub fn add(left: u64, right: u64) -> u64 {
