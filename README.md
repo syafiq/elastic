@@ -55,6 +55,8 @@ Each crate follows a similar structure:
 - Monotonic clock for precise time measurements
 - Error handling for system time and timezone operations
 - WebAssembly Interface Types (WIT) support for language interoperability
+- SEV-SNP environment detection and automatic clock mechanism selection
+- WASM example demonstrating SEV-SNP detection and clock usage
 
 ### File Interface (`elastic-file`)
 - Secure file operations with container-based isolation

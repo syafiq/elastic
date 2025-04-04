@@ -46,6 +46,7 @@ Legend:
   - Created SEV-SNP specific clock implementation in `src/sev/clock.rs`
   - Implemented secure time measurement using TSC
   - Added SEV-SNP platform verification
+  - Updated SEV-SNP detection to use `/dev/sev-guest` instead of `/dev/sev`
 - ✅ Implemented clock types for SEV-SNP
   - System clock: Uses TSC with wallclock time
   - Monotonic clock: Uses TSC directly
@@ -59,6 +60,10 @@ Legend:
   - Tested time retrieval for different clock types
   - Tested resolution and elapsed time calculations
   - All tests passing successfully
+- ✅ Added WASM example with SEV-SNP detection
+  - Created WASM binary that detects SEV-SNP environment
+  - Added logging to show which clock mechanism is being used
+  - Verified correct operation on both SEV-SNP and non-SEV-SNP machines
 
 ### File Interface
 - ✅ Implemented secure file operations
