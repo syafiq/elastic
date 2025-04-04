@@ -1,25 +1,33 @@
-use elastic_clock::{clock::ClockManager, ClockConfig, ClockType};
+use elastic_clock::{ClockConfig, ClockContext, ClockType};
+use std::error::Error;
 
 #[no_mangle]
 pub extern "C" fn get_current_time() -> u64 {
-    let manager = ClockManager::new();
-    let config = ClockConfig {
-        clock_type: ClockType::Monotonic,
-        high_resolution: true,
-    };
-    let handle = manager.create_clock(&config).unwrap();
-    let time = manager.get_time(handle).unwrap();
-    manager.destroy_clock(handle).unwrap();
-    time
+    match try_get_current_time() {
+        Ok(time) => time,
+        Err(_) => 0,
+    }
 }
 
 #[no_mangle]
-pub extern "C" fn _start() -> u64 {
-    get_current_time()
+pub extern "C" fn _start() {
+    let time = get_current_time();
+    // Print the time to stdout
+    println!("Current time: {}", time);
 }
 
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+fn try_get_current_time() -> Result<u64, Box<dyn Error>> {
+    let context = ClockContext::new();
+    let config = ClockConfig {
+        clock_type: ClockType::System,
+        high_resolution: true,
+    };
+    
+    let handle = context.create_clock(&config)?;
+    let time = context.get_time(handle)?;
+    context.destroy_clock(handle)?;
+    
+    Ok(time)
 }
 
 #[cfg(test)]
@@ -27,8 +35,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+    fn test_get_current_time() {
+        let time = get_current_time();
+        assert!(time > 0);
     }
 }
