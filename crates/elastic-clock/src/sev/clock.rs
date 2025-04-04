@@ -18,6 +18,7 @@ pub struct ClockManager {
     clocks: Mutex<HashMap<u32, Clock>>,
     next_handle: Mutex<u32>,
     tsc_frequency: u64,
+    is_sev_snp: bool,
 }
 
 struct Clock {
@@ -28,57 +29,55 @@ struct Clock {
 
 impl ClockManager {
     pub fn new() -> Result<Self, CommonError> {
+        // Check if we're running in a SEV-SNP environment
+        let is_sev_snp = std::path::Path::new("/dev/sev-guest").exists();
+        println!("Running in SEV-SNP environment: {}", is_sev_snp);
+
         // For WASM target, we'll use a fixed TSC frequency
         // In a real SEV-SNP environment, this would be obtained from the platform
-        let tsc_frequency = 2_500_000_000; // Assuming 2.5GHz
+        let tsc_frequency = if is_sev_snp {
+            // In SEV-SNP environment, we would read the actual TSC frequency
+            2_500_000_000 // Placeholder for actual SEV-SNP TSC frequency
+        } else {
+            // On regular systems, use a reasonable default
+            2_500_000_000
+        };
 
         Ok(Self {
             clocks: Mutex::new(HashMap::new()),
             next_handle: Mutex::new(1),
             tsc_frequency,
+            is_sev_snp,
         })
     }
 
     // Get current timestamp using SEV-SNP mechanisms
     fn get_current_timestamp(&self, clock_type: ClockType) -> Result<SnpTimestamp, CommonError> {
-        // For WASM target, we'll use a simple counter
-        // In a real SEV-SNP environment, this would use RDTSC
-        let tsc = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| CommonError::OperationFailed(format!("Failed to get system time: {}", e)))?
-            .as_nanos() as u64;
-        
-        match clock_type {
-            ClockType::System => {
-                // For system time, we'll use the timestamp directly
-                Ok(SnpTimestamp {
-                    tsc,
-                    wallclock: tsc,
-                    frequency: (self.tsc_frequency & 0xFFFFFFFF) as u32,
-                })
-            },
-            ClockType::Monotonic => {
-                // Use timestamp directly for monotonic time
-                Ok(SnpTimestamp {
-                    tsc,
-                    wallclock: 0,
-                    frequency: (self.tsc_frequency & 0xFFFFFFFF) as u32,
-                })
-            },
-            ClockType::Process | ClockType::Thread => {
-                // Use timestamp with process/thread specific offset
-                let offset = match clock_type {
-                    ClockType::Process => 0x1000,
-                    ClockType::Thread => 0x2000,
-                    _ => unreachable!(),
-                };
-                
-                Ok(SnpTimestamp {
-                    tsc: tsc.wrapping_add(offset),
-                    wallclock: 0,
-                    frequency: (self.tsc_frequency & 0xFFFFFFFF) as u32,
-                })
-            }
+        if self.is_sev_snp {
+            println!("Using SEV-SNP clock mechanism");
+            // In a real SEV-SNP environment, this would use RDTSC
+            // For now, we'll use system time as a placeholder
+            let tsc = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|e| CommonError::OperationFailed(format!("Failed to get system time: {}", e)))?
+                .as_nanos() as u64;
+            
+            Ok(SnpTimestamp {
+                tsc,
+                wallclock: tsc,
+                frequency: self.tsc_frequency as u32,
+            })
+        } else {
+            println!("Using standard system clock");
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|e| CommonError::OperationFailed(format!("Failed to get system time: {}", e)))?;
+            
+            Ok(SnpTimestamp {
+                tsc: now.as_nanos() as u64,
+                wallclock: now.as_nanos() as u64,
+                frequency: self.tsc_frequency as u32,
+            })
         }
     }
 }
