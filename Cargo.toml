@@ -5,6 +5,7 @@ members = [
     "crates/elastic-file",
     "crates/elastic-tls",
     "examples/wasm-clock-example",
+    "examples/wasm-crypto-example",
 ]
 resolver = "2"
 
