@@ -99,16 +99,10 @@ impl ClockManager {
 
     pub fn sleep(&self, handle: u32, duration: u64) -> Result<(), String> {
         let clocks = self.clocks.lock().unwrap();
-        let clock = clocks.get(&handle)
+        let _clock = clocks.get(&handle)
             .ok_or_else(|| format!("Clock handle {} not found", handle))?;
 
-        let duration = if clock.high_resolution {
-            Duration::from_nanos(duration)
-        } else {
-            Duration::from_millis(duration / 1_000_000)
-        };
-
-        std::thread::sleep(duration);
+        // In WASM, we can't actually sleep, so we just return immediately
         Ok(())
     }
 
