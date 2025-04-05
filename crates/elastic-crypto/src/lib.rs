@@ -2,18 +2,23 @@
 mod linux;
 #[cfg(feature = "wasm")]
 pub mod wasm;
+#[cfg(feature = "sevsnp")]
+mod sev;
 
 mod error;
 pub use error::Error;
+pub use crate::aes::AesMode;
 
 #[cfg(feature = "linux")]
 pub use linux::*;
 #[cfg(feature = "wasm")]
 pub use wasm::*;
+#[cfg(feature = "sevsnp")]
+pub use sev::*;
 
 pub mod aes {
-    use aes_gcm::{
-        aead::{Aead, KeyInit},
+use aes_gcm::{
+    aead::{Aead, KeyInit},
         Aes256Gcm, Nonce,
     };
     use rand::RngCore;
@@ -22,7 +27,7 @@ pub mod aes {
     #[derive(Debug)]
     pub struct AesKey(Vec<u8>);
 
-    #[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
     pub enum AesMode {
         CBC,
         GCM,
@@ -86,6 +91,12 @@ pub mod aes {
             }
         }
     }
+}
+
+pub trait Crypto {
+    fn generate_key(&self) -> Result<Vec<u8>, Error>;
+    fn encrypt(&self, key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error>;
+    fn decrypt(&self, key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error>;
 }
 
 #[cfg(test)]

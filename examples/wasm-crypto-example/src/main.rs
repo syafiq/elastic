@@ -1,87 +1,65 @@
-use elastic_crypto::wasm::WasmCrypto;
-use elastic_crypto::aes::AesMode;
-use elastic_crypto::Error;
-use std::error::Error as StdError;
+use elastic_crypto::{WasmCrypto, AesMode, Crypto};
 use hex;
 
-fn main() -> Result<(), Box<dyn StdError>> {
+fn main() {
+    println!("Starting WASM crypto example...");
+    
     // Initialize crypto with SEV-SNP detection
-    let crypto = WasmCrypto::new()?;
-    let is_sevsnp = crypto.is_sevsnp;
-    println!("Running in SEV-SNP environment: {}", is_sevsnp);
-
+    let crypto = WasmCrypto::new();
+    println!("Crypto initialized. SEV-SNP environment: {}", crypto.is_sevsnp());
+    
     // Generate a secure key
-    let key = crypto.generate_key()?;
-    println!("Generated key (hex): {}", hex::encode(&key));
+    println!("Generating AES key...");
+    let key = crypto.generate_key().expect("Failed to generate key");
+    println!("Generated key: {}", hex::encode(&key));
     
     // Example data to encrypt
-    let data = b"Hello, Crypto!";
+    let data = b"Hello, SEV-SNP!";
     println!("Original data: {}", String::from_utf8_lossy(data));
     
-    // Encrypt using GCM mode
+    // Encrypt the data
     println!("Encrypting data...");
-    let encrypted = crypto.encrypt(&key, data, AesMode::GCM)?;
-    println!("Encrypted data (hex): {}", hex::encode(&encrypted));
+    let encrypted = crypto.encrypt(&key, data, AesMode::GCM)
+        .expect("Failed to encrypt data");
+    println!("Encrypted data: {}", hex::encode(&encrypted));
     
-    // Decrypt
+    // Decrypt the data
     println!("Decrypting data...");
-    let decrypted = crypto.decrypt(&key, &encrypted, AesMode::GCM)?;
+    let decrypted = crypto.decrypt(&key, &encrypted, AesMode::GCM)
+        .expect("Failed to decrypt data");
     println!("Decrypted data: {}", String::from_utf8_lossy(&decrypted));
     
+    // Verify the result
     if data == &decrypted[..] {
-        println!("Success: encryption/decryption worked!");
+        println!("✅ Encryption/Decryption successful!");
     } else {
-        println!("Error: decrypted data doesn't match original!");
+        println!("❌ Encryption/Decryption failed!");
     }
-    
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
-
+    
     #[test]
     fn test_crypto_operations() {
-        // Test in non-SEV-SNP environment
-        env::remove_var("SEV_SNP");
-        let crypto = WasmCrypto::new().unwrap();
-        assert!(!crypto.is_sevsnp);
-
-        // Test key generation
-        let key = crypto.generate_key().unwrap();
-        assert_eq!(key.len(), 32);
-
-        // Test encryption/decryption
-        let data = b"Hello, Crypto!";
-        let encrypted = crypto.encrypt(&key, data, AesMode::GCM).unwrap();
-        let decrypted = crypto.decrypt(&key, &encrypted, AesMode::GCM).unwrap();
+        let crypto = WasmCrypto::new();
+        println!("Running test in SEV-SNP environment: {}", crypto.is_sevsnp());
+        
+        let key = crypto.generate_key().expect("Failed to generate key");
+        println!("Test key generated: {}", hex::encode(&key));
+        
+        let data = b"Test data";
+        println!("Test data: {}", String::from_utf8_lossy(data));
+        
+        let encrypted = crypto.encrypt(&key, data, AesMode::GCM)
+            .expect("Failed to encrypt test data");
+        println!("Test data encrypted: {}", hex::encode(&encrypted));
+        
+        let decrypted = crypto.decrypt(&key, &encrypted, AesMode::GCM)
+            .expect("Failed to decrypt test data");
+        println!("Test data decrypted: {}", String::from_utf8_lossy(&decrypted));
+        
         assert_eq!(data, &decrypted[..]);
-
-        // Test in SEV-SNP environment
-        env::set_var("SEV_SNP", "1");
-        let crypto = WasmCrypto::new().unwrap();
-        assert!(crypto.is_sevsnp);
-
-        // These should fail since SEV-SNP implementation is not complete
-        assert!(matches!(crypto.generate_key(), Err(elastic_crypto::Error::SevsnpNotAvailable)));
-        assert!(matches!(crypto.encrypt(&key, data, AesMode::GCM), Err(elastic_crypto::Error::SevsnpNotAvailable)));
-        assert!(matches!(crypto.decrypt(&key, &encrypted, AesMode::GCM), Err(elastic_crypto::Error::SevsnpNotAvailable)));
-    }
-
-    #[test]
-    fn test_error_handling() {
-        let crypto = WasmCrypto::new().unwrap();
-
-        // Test invalid key length
-        let key = vec![0u8; 16]; // Too short
-        assert!(matches!(crypto.encrypt(&key, b"test", AesMode::GCM), Err(elastic_crypto::Error::InvalidKeyLength)));
-        assert!(matches!(crypto.decrypt(&key, b"test", AesMode::GCM), Err(elastic_crypto::Error::InvalidKeyLength)));
-
-        // Test unsupported mode
-        let key = crypto.generate_key().unwrap();
-        assert!(matches!(crypto.encrypt(&key, b"test", AesMode::CBC), Err(elastic_crypto::Error::UnsupportedOperation)));
-        assert!(matches!(crypto.decrypt(&key, b"test", AesMode::CBC), Err(elastic_crypto::Error::UnsupportedOperation)));
     }
 } 

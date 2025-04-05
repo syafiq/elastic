@@ -18,4 +18,5 @@ tempfile = "3.2"
 [features]
 default = ["linux"]
 linux = []
-wasm = [] 
+wasm = []
+sevsnp = [] 

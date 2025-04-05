@@ -31,4 +31,10 @@ pub enum Error {
     
     #[error("Not implemented")]
     NotImplemented,
+    
+    #[error("Encryption failed")]
+    EncryptionFailed,
+    
+    #[error("Decryption failed")]
+    DecryptionFailed,
 } 
