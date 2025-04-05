@@ -98,6 +98,7 @@ mod tests {
     fn test_wasm_crypto_non_sevsnp() {
         // Clear SEV_SNP env var to simulate non-SEV-SNP environment
         env::remove_var("SEV_SNP");
+        assert!(env::var("SEV_SNP").is_err(), "SEV_SNP environment variable should be unset");
         
         let crypto = WasmCrypto::new().unwrap();
         assert!(!crypto.is_sevsnp);
