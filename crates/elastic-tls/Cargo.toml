@@ -7,7 +7,7 @@ description = "TLS Interface for ELASTIC project"
 
 [dependencies]
 wit-bindgen = "0.17"
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.0", features = ["sync", "macros", "io-util", "rt", "time"] }
 tokio-rustls = "0.24"
 rustls = { version = "0.21", features = ["dangerous_configuration"] }
 rustls-native-certs = "0.6.3"

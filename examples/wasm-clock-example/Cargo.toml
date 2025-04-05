@@ -12,4 +12,4 @@ name = "wasm_clock_example"
 path = "src/main.rs"
 
 [dependencies]
-elastic-clock = { path = "../../crates/elastic-clock", default-features = false, features = ["sev"] }
+elastic-clock = { path = "../../crates/elastic-clock", default-features = true }
