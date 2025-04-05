@@ -1,7 +1,7 @@
 #[cfg(feature = "linux")]
 mod linux;
 #[cfg(feature = "wasm")]
-mod wasm;
+pub mod wasm;
 
 mod error;
 pub use error::Error;
@@ -85,5 +85,74 @@ pub mod aes {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    #[cfg(feature = "wasm")]
+    fn test_wasm_crypto_non_sevsnp() {
+        // Clear SEV_SNP env var to simulate non-SEV-SNP environment
+        env::remove_var("SEV_SNP");
+        
+        let crypto = WasmCrypto::new().unwrap();
+        assert!(!crypto.is_sevsnp);
+
+        // Test key generation
+        let key = crypto.generate_key().unwrap();
+        assert_eq!(key.len(), 32);
+
+        // Test encryption/decryption
+        let data = b"Hello, Crypto!";
+        let encrypted = crypto.encrypt(&key, data, AesMode::GCM).unwrap();
+        let decrypted = crypto.decrypt(&key, &encrypted, AesMode::GCM).unwrap();
+        assert_eq!(data, &decrypted[..]);
+    }
+
+    #[test]
+    #[cfg(feature = "wasm")]
+    fn test_wasm_crypto_sevsnp() {
+        // Set SEV_SNP env var to simulate SEV-SNP environment
+        env::set_var("SEV_SNP", "1");
+        
+        let crypto = WasmCrypto::new().unwrap();
+        assert!(crypto.is_sevsnp);
+
+        // These operations should fail since SEV-SNP implementation is not complete
+        assert!(matches!(crypto.generate_key(), Err(Error::SevsnpNotAvailable)));
+        assert!(matches!(crypto.encrypt(&[0u8; 32], b"test", AesMode::GCM), Err(Error::SevsnpNotAvailable)));
+        assert!(matches!(crypto.decrypt(&[0u8; 32], b"test", AesMode::GCM), Err(Error::SevsnpNotAvailable)));
+    }
+
+    #[test]
+    #[cfg(feature = "linux")]
+    fn test_sevsnp_rng() {
+        let rng = SevsnpRng::new();
+        // This should fail since SEV-SNP implementation is not complete
+        assert!(matches!(rng, Err(Error::SevsnpNotAvailable)));
+    }
+
+    #[test]
+    #[cfg(feature = "linux")]
+    fn test_sevsnp_aes() {
+        let aes = SevsnpAes::new(&[0u8; 32]);
+        // This should fail since SEV-SNP implementation is not complete
+        assert!(matches!(aes, Err(Error::SevsnpNotAvailable)));
+    }
+
+    #[test]
+    fn test_error_handling() {
+        // Test invalid key length
+        let key = vec![0u8; 16]; // Too short
+        assert!(matches!(AesKey::new(&key), Err(Error::InvalidKeyLength)));
+
+        // Test unsupported operation
+        let key = AesKey::new(&[0u8; 32]).unwrap();
+        assert!(matches!(key.encrypt(b"test", AesMode::CBC), Err(Error::UnsupportedOperation)));
+        assert!(matches!(key.decrypt(b"test", AesMode::CBC), Err(Error::UnsupportedOperation)));
     }
 } 

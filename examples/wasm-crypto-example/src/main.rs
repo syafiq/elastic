@@ -1,31 +1,18 @@
-use elastic_crypto::aes::{AesKey, AesMode};
-use std::error::Error;
+use elastic_crypto::wasm::WasmCrypto;
+use elastic_crypto::aes::AesMode;
+use elastic_crypto::Error;
+use std::error::Error as StdError;
 use hex;
-use rand::Rng;
 
-fn is_sev_snp() -> bool {
-    if cfg!(target_arch = "wasm32") {
-        // In WASM, use WASI env vars
-        std::env::vars()
-            .any(|(key, _)| key == "SEV_SNP")
-    } else {
-        // On native, check for /dev/sev-guest
-        std::path::Path::new("/dev/sev-guest").exists()
-    }
-}
+fn main() -> Result<(), Box<dyn StdError>> {
+    // Initialize crypto with SEV-SNP detection
+    let crypto = WasmCrypto::new()?;
+    let is_sevsnp = crypto.is_sevsnp;
+    println!("Running in SEV-SNP environment: {}", is_sevsnp);
 
-fn main() -> Result<(), Box<dyn Error>> {
-    // Check if we're running in SEV-SNP environment
-    let is_sev = is_sev_snp();
-    println!("Running in SEV-SNP environment: {}", is_sev);
-
-    // Generate a random key
-    let mut key = vec![0u8; 32];
-    rand::thread_rng().fill(&mut key[..]);
+    // Generate a secure key
+    let key = crypto.generate_key()?;
     println!("Generated key (hex): {}", hex::encode(&key));
-    
-    // Create AES key
-    let aes_key = AesKey::new(&key)?;
     
     // Example data to encrypt
     let data = b"Hello, Crypto!";
@@ -33,12 +20,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     
     // Encrypt using GCM mode
     println!("Encrypting data...");
-    let encrypted = aes_key.encrypt(data, AesMode::GCM)?;
+    let encrypted = crypto.encrypt(&key, data, AesMode::GCM)?;
     println!("Encrypted data (hex): {}", hex::encode(&encrypted));
     
     // Decrypt
     println!("Decrypting data...");
-    let decrypted = aes_key.decrypt(&encrypted, AesMode::GCM)?;
+    let decrypted = crypto.decrypt(&key, &encrypted, AesMode::GCM)?;
     println!("Decrypted data: {}", String::from_utf8_lossy(&decrypted));
     
     if data == &decrypted[..] {
@@ -48,4 +35,53 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn test_crypto_operations() {
+        // Test in non-SEV-SNP environment
+        env::remove_var("SEV_SNP");
+        let crypto = WasmCrypto::new().unwrap();
+        assert!(!crypto.is_sevsnp);
+
+        // Test key generation
+        let key = crypto.generate_key().unwrap();
+        assert_eq!(key.len(), 32);
+
+        // Test encryption/decryption
+        let data = b"Hello, Crypto!";
+        let encrypted = crypto.encrypt(&key, data, AesMode::GCM).unwrap();
+        let decrypted = crypto.decrypt(&key, &encrypted, AesMode::GCM).unwrap();
+        assert_eq!(data, &decrypted[..]);
+
+        // Test in SEV-SNP environment
+        env::set_var("SEV_SNP", "1");
+        let crypto = WasmCrypto::new().unwrap();
+        assert!(crypto.is_sevsnp);
+
+        // These should fail since SEV-SNP implementation is not complete
+        assert!(matches!(crypto.generate_key(), Err(elastic_crypto::Error::SevsnpNotAvailable)));
+        assert!(matches!(crypto.encrypt(&key, data, AesMode::GCM), Err(elastic_crypto::Error::SevsnpNotAvailable)));
+        assert!(matches!(crypto.decrypt(&key, &encrypted, AesMode::GCM), Err(elastic_crypto::Error::SevsnpNotAvailable)));
+    }
+
+    #[test]
+    fn test_error_handling() {
+        let crypto = WasmCrypto::new().unwrap();
+
+        // Test invalid key length
+        let key = vec![0u8; 16]; // Too short
+        assert!(matches!(crypto.encrypt(&key, b"test", AesMode::GCM), Err(elastic_crypto::Error::InvalidKeyLength)));
+        assert!(matches!(crypto.decrypt(&key, b"test", AesMode::GCM), Err(elastic_crypto::Error::InvalidKeyLength)));
+
+        // Test unsupported mode
+        let key = crypto.generate_key().unwrap();
+        assert!(matches!(crypto.encrypt(&key, b"test", AesMode::CBC), Err(elastic_crypto::Error::UnsupportedOperation)));
+        assert!(matches!(crypto.decrypt(&key, b"test", AesMode::CBC), Err(elastic_crypto::Error::UnsupportedOperation)));
+    }
 } 

@@ -1,16 +1,34 @@
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Error, Debug)]
 pub enum Error {
     #[error("Invalid key length")]
     InvalidKeyLength,
     
-    #[error("Encryption failed")]
+    #[error("Encryption error")]
     EncryptionError,
     
-    #[error("Decryption failed")]
+    #[error("Decryption error")]
     DecryptionError,
     
-    #[error("Operation not supported")]
+    #[error("Unsupported operation")]
     UnsupportedOperation,
+    
+    #[error("SEV-SNP not available")]
+    SevsnpNotAvailable,
+    
+    #[error("SEV-SNP operation failed: {0}")]
+    SevsnpOperationFailed(String),
+    
+    #[error("SEV-SNP RNG error: {0}")]
+    SevsnpRngError(String),
+    
+    #[error("SEV-SNP AES error: {0}")]
+    SevsnpAesError(String),
+    
+    #[error("Unsupported mode")]
+    UnsupportedMode,
+    
+    #[error("Not implemented")]
+    NotImplemented,
 } 
