@@ -101,6 +101,15 @@ Legend:
   - Resolved HMAC initialization
   - Updated dependencies
   - Added comprehensive tests
+- ✅ Refactored for WASM compatibility
+  - Removed WIT bindings in favor of environment variables
+  - Added WASI support for environment variable access
+  - Implemented SEV-SNP detection using environment variables
+  - Split error handling into separate module
+  - Added WASM-specific implementations
+  - Simplified Linux module to re-export AES implementation
+  - Updated all dependencies to remove WIT bindings
+  - Created WASM example with SEV-SNP environment detection
 
 ### TLS Interface
 - ⏳ Planning phase
@@ -134,6 +143,8 @@ Legend:
   - All functionality implemented and working
   - Tests passing successfully
   - Documentation updated in README.md
+  - Refactored to use environment variables instead of WIT
+  - Added WASM compatibility improvements
 - TLS Interface: Planning phase
   - WIT interface defined
   - Implementation pending
@@ -168,6 +179,11 @@ Legend:
    - Add TLS interface to README.md
    - Add usage examples
    - Add test instructions
+4. Continue WASM improvements:
+   - Update remaining interfaces to use environment variables
+   - Add more WASM-specific optimizations
+   - Improve error handling in WASM context
+   - Add more comprehensive WASM tests
 
 ## Technical Challenges
 1. RSA Implementation:
@@ -185,11 +201,17 @@ Legend:
    - Ensuring all dependencies work together
    - Managing version constraints
 
+4. WASM Compatibility:
+   - Transitioning from WIT to environment variables
+   - Ensuring proper SEV-SNP detection in WASM context
+   - Managing platform-specific code paths
+   - Handling WASM-specific limitations (e.g., sleep operations)
+
 ## Notes
-- All interfaces follow WIT specification
-  - Defined in `tests/wit/` directory
-  - Follow consistent naming and structure
-  - Provide clear documentation
+- All interfaces follow consistent implementation patterns
+  - Using environment variables for platform detection
+  - Following consistent naming and structure
+  - Providing clear documentation
 - Tests are comprehensive and passing for completed interfaces
   - Each interface has dedicated test file
   - Tests cover all functionality
@@ -198,10 +220,6 @@ Legend:
   - Updated with each interface implementation
   - Includes usage examples
   - Lists all dependencies
-- WIT interfaces are stored in tests/wit/
-  - `clock.wit`: Time-related operations
-  - `file.wit`: File operations
-  - `crypto.wit`: Cryptographic operations
 
 ## Questions & Decisions
 1. Q: Should we implement standard (non-SEV) versions of these interfaces?
