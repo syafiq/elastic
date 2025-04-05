@@ -4,10 +4,19 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+name = "wasm_crypto_example"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[[bin]]
+name = "wasm_crypto_example"
+path = "src/main.rs"
 
 [dependencies]
-elastic-crypto = { path = "../../crates/elastic-crypto" }
-rand = "0.8"
+elastic-crypto = { path = "../../crates/elastic-crypto", default-features = false, features = ["wasm"] }
+wasm-bindgen = "0.2"
+rand = { version = "0.8", features = ["getrandom"] }
 hex = "0.4"
-getrandom = { version = "0.2", features = ["js"] } 
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasi = "0.11" 
