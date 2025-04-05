@@ -16,7 +16,7 @@ impl WasmCrypto {
     pub fn generate_key(&self) -> Result<Vec<u8>, Error> {
         if self.is_sevsnp {
             // TODO: Use SEV-SNP RNG when implemented
-            Err(Error::SevsnpNotAvailable)
+            Err(Error::NotImplemented)
         } else {
             let mut key = vec![0u8; 32];
             rand::thread_rng().fill_bytes(&mut key[..]);
@@ -27,7 +27,7 @@ impl WasmCrypto {
     pub fn encrypt(&self, key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error> {
         if self.is_sevsnp {
             // TODO: Use SEV-SNP AES when implemented
-            Err(Error::SevsnpNotAvailable)
+            Err(Error::NotImplemented)
         } else {
             let aes_key = AesKey::new(key)?;
             aes_key.encrypt(data, mode)
@@ -37,7 +37,7 @@ impl WasmCrypto {
     pub fn decrypt(&self, key: &[u8], encrypted_data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error> {
         if self.is_sevsnp {
             // TODO: Use SEV-SNP AES when implemented
-            Err(Error::SevsnpNotAvailable)
+            Err(Error::NotImplemented)
         } else {
             let aes_key = AesKey::new(key)?;
             aes_key.decrypt(encrypted_data, mode)

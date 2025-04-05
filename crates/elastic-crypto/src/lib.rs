@@ -117,16 +117,27 @@ mod tests {
     #[test]
     #[cfg(feature = "wasm")]
     fn test_wasm_crypto_sevsnp() {
-        // Set SEV_SNP env var to simulate SEV-SNP environment
+        // First test without SEV-SNP to ensure clean state
+        env::remove_var("SEV_SNP");
+        let crypto = WasmCrypto::new().unwrap();
+        assert!(!crypto.is_sevsnp);
+
+        // Now test with SEV-SNP
         env::set_var("SEV_SNP", "1");
-        
         let crypto = WasmCrypto::new().unwrap();
         assert!(crypto.is_sevsnp);
 
-        // These operations should fail since SEV-SNP implementation is not complete
-        assert!(matches!(crypto.generate_key(), Err(Error::SevsnpNotAvailable)));
-        assert!(matches!(crypto.encrypt(&[0u8; 32], b"test", AesMode::GCM), Err(Error::SevsnpNotAvailable)));
-        assert!(matches!(crypto.decrypt(&[0u8; 32], b"test", AesMode::GCM), Err(Error::SevsnpNotAvailable)));
+        // In a real SEV-SNP environment, these operations should succeed
+        // For now, they return NotImplemented since we haven't implemented the SEV-SNP specific crypto yet
+        let key = crypto.generate_key();
+        assert!(matches!(key, Err(Error::NotImplemented)), "SEV-SNP key generation should be implemented");
+
+        let test_key = [0u8; 32];
+        let encrypt_result = crypto.encrypt(&test_key, b"test", AesMode::GCM);
+        assert!(matches!(encrypt_result, Err(Error::NotImplemented)), "SEV-SNP encryption should be implemented");
+
+        let decrypt_result = crypto.decrypt(&test_key, b"test", AesMode::GCM);
+        assert!(matches!(decrypt_result, Err(Error::NotImplemented)), "SEV-SNP decryption should be implemented");
     }
 
     #[test]
