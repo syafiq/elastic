@@ -18,7 +18,8 @@ crates/
 ├── elastic-crypto/     # Cryptographic operations
 │   ├── src/
 │   │   ├── linux/     # Linux-specific implementation
-│   │   └── sev/       # SEV-SNP specific implementation (in progress)
+│   │   ├── sev/       # SEV-SNP specific implementation
+│   │   └── wasm.rs    # WASM-specific implementation
 │   └── tests/
 │       ├── linux/     # Linux-specific tests
 │       └── sev/       # SEV-SNP specific tests
@@ -70,11 +71,14 @@ Each crate follows a similar structure:
 - Symmetric encryption/decryption (AES-256-GCM)
   - Linux: Software implementation using `aes-gcm` crate
   - SEV-SNP: Hardware-accelerated implementation using SEV firmware
+  - WASM: Secure software implementation with SEV-SNP environment detection
 - Random number generation
   - Linux: System RNG using `rand` crate
   - SEV-SNP: Hardware RNG with timestamp-based entropy
+  - WASM: Secure RNG with SEV-SNP environment detection
 - Key management and context handling
 - WebAssembly Interface Types (WIT) support for language interoperability
+- Environment-based SEV-SNP detection for WASM environments
 
 ### TLS Interface (`elastic-tls`)
 - Secure communication using TLS 1.2 and 1.3
@@ -105,6 +109,7 @@ Legend:
 - Rust (latest stable version)
 - WebAssembly tools (wasm-bindgen, wasm-pack)
 - OpenSSL or equivalent TLS library
+- For SEV-SNP: AMD SEV-SNP capable hardware and firmware
 
 ### Building
 ```bash
@@ -113,6 +118,9 @@ cargo build
 
 # Build specific crate
 cargo build -p elastic-tls
+
+# Build WASM example with SEV-SNP support
+cargo build -p wasm-crypto-example --target wasm32-wasip1 --features elastic-crypto/sevsnp
 ```
 
 ### Testing
@@ -122,6 +130,12 @@ cargo test
 
 # Run tests for specific crate
 cargo test -p elastic-tls
+
+# Test WASM example on SEV-SNP machine
+wasmtime --env ELASTIC_SEV_SNP=1 target/wasm32-wasip1/debug/wasm-crypto-example.wasm
+
+# Test WASM example on standard Linux
+wasmtime target/wasm32-wasip1/debug/wasm-crypto-example.wasm
 ```
 
 ## WIT Interface Support
