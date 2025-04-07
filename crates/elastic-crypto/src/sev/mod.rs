@@ -1,10 +1,12 @@
 use crate::Error;
 use sev::firmware::guest::Firmware;
 use std::path::Path;
+use std::io;
 
 // SEV-SNP specific implementation
 pub struct SevsnpRng {
     firmware: Firmware,
+    counter: u32,
 }
 
 impl SevsnpRng {
@@ -16,40 +18,58 @@ impl SevsnpRng {
 
         // Initialize the SEV firmware interface
         let firmware = Firmware::open()
-            .map_err(|_| Error::SevsnpNotAvailable)?;
+            .map_err(|e| Error::SevsnpOperationFailed(e.to_string()))?;
 
-        Ok(Self { firmware })
+        Ok(Self { firmware, counter: 0 })
     }
 
-    pub fn get_random_bytes(&self, len: usize) -> Result<Vec<u8>, Error> {
-        // Use SEV-SNP's hardware RNG
+    pub fn get_random_bytes(&mut self, len: usize) -> Result<Vec<u8>, Error> {
         let mut buffer = vec![0u8; len];
-        self.firmware
-            .get_random_bytes(&mut buffer)
-            .map_err(|_| Error::NotImplemented)?;
+        self.counter = self.counter.wrapping_add(1);
+        let request = sev::firmware::guest::DerivedKey::new(
+            false,
+            GuestFieldSelect(0),
+            self.counter,
+            0,
+            0,
+        );
+        let key = self.firmware.get_derived_key(None, request)
+            .map_err(|e| Error::SevsnpOperationFailed(e.to_string()))?;
+        buffer.copy_from_slice(&key[..len]);
         Ok(buffer)
     }
 }
 
 impl rand::RngCore for SevsnpRng {
     fn next_u32(&mut self) -> u32 {
-        // TODO: Implement proper SEV-SNP RNG
-        thread_rng().next_u32()
+        let mut bytes = [0u8; 4];
+        self.fill_bytes(&mut bytes);
+        u32::from_le_bytes(bytes)
     }
 
     fn next_u64(&mut self) -> u64 {
-        // TODO: Implement proper SEV-SNP RNG
-        thread_rng().next_u64()
+        let mut bytes = [0u8; 8];
+        self.fill_bytes(&mut bytes);
+        u64::from_le_bytes(bytes)
     }
 
-    fn fill_bytes(&mut self, _dest: &mut [u8]) {
-        // TODO: Implement proper SEV-SNP RNG
-        thread_rng().fill_bytes(_dest);
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        self.try_fill_bytes(dest).unwrap();
     }
 
-    fn try_fill_bytes(&mut self, _dest: &mut [u8]) -> Result<(), rand::Error> {
-        // TODO: Implement proper SEV-SNP RNG
-        thread_rng().try_fill_bytes(_dest)
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+        self.counter = self.counter.wrapping_add(1);
+        let request = sev::firmware::guest::DerivedKey::new(
+            false,
+            GuestFieldSelect(0),
+            self.counter,
+            0,
+            0,
+        );
+        let key = self.firmware.get_derived_key(None, request)
+            .map_err(|e| rand::Error::new(io::Error::new(io::ErrorKind::Other, e.to_string())))?;
+        dest.copy_from_slice(&key[..dest.len()]);
+        Ok(())
     }
 }
 
