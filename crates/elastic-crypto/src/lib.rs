@@ -1,19 +1,19 @@
 #[cfg(feature = "linux")]
 mod linux;
-#[cfg(feature = "wasm")]
+#[cfg(feature = "wasi")]
 pub mod wasm;
 #[cfg(feature = "sevsnp")]
 mod sev;
 
 mod error;
-mod aes;
+pub mod aes;
 
 pub use error::Error;
 pub use aes::{AesKey, AesMode};
 
 #[cfg(feature = "linux")]
 pub use linux::*;
-#[cfg(feature = "wasm")]
+#[cfg(feature = "wasi")]
 pub use wasm::*;
 #[cfg(feature = "sevsnp")]
 pub use sev::{SevsnpRng, SevsnpAes};
@@ -30,7 +30,7 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    #[cfg(feature = "wasm")]
+    #[cfg(feature = "wasi")]
     fn test_wasm_crypto() {
         let crypto = WasmCrypto::new();
         let has_sevsnp = Path::new("/dev/sev-guest").exists();
