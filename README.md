@@ -354,3 +354,151 @@ world tls-impl {
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+# Elastic File System
+
+A secure, cross-platform file system implementation with support for SEV-SNP and WASM environments.
+
+## Features
+
+- **Cross-Platform Support**: Works on Linux, Windows, and WebAssembly (WASM)
+- **Secure File Operations**: Built-in encryption and secure file handling
+- **SEV-SNP Support**: Hardware-backed security for AMD SEV-SNP environments
+- **WASM Integration**: Full file system support in WebAssembly environments
+- **Error Handling**: Comprehensive error management with detailed error types
+- **File Operations**: Complete set of file operations (open, read, write, seek, flush, close)
+- **Metadata Support**: File metadata retrieval and management
+
+## Architecture
+
+The system is built with a modular architecture:
+
+- **Common Module**: Core interfaces and shared functionality
+- **Platform-Specific Implementations**:
+  - Linux: Native file system operations
+  - Windows: Windows-specific file handling
+  - WASM: WebAssembly file system support
+- **Security Layer**: SEV-SNP integration and encryption
+
+## Getting Started
+
+### Prerequisites
+
+- Rust 1.70 or later
+- For SEV-SNP support: AMD processor with SEV-SNP enabled
+- For WASM support: `wasm32-wasip1` target
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/elastic.git
+cd elastic
+
+# Build the project
+cargo build
+
+# Run tests
+cargo test
+```
+
+### Building for WASM
+
+```bash
+# Install WASM target
+rustup target add wasm32-wasip1
+
+# Build WASM example
+cargo build -p wasm-file-example --target wasm32-wasip1
+
+# Run WASM example
+wasmtime --dir . target/wasm32-wasip1/debug/wasm-file-example.wasm
+```
+
+### SEV-SNP Support
+
+To enable SEV-SNP features:
+
+```bash
+# Set environment variable for SEV-SNP mode
+export ELASTIC_SEV_SNP=1
+
+# Run with SEV-SNP support
+cargo run --features sev,sevsnp
+```
+
+## Usage
+
+### Basic File Operations
+
+```rust
+use elastic_file::{FileConfig, FileContext, FileMode};
+
+// Create a file context
+let context = FileContext::new();
+
+// Configure file
+let config = FileConfig {
+    mode: FileMode::ReadWrite,
+    path: "example.txt".into(),
+    secure: true,
+};
+
+// Open file
+let handle = context.open(&config)?;
+
+// Write data
+context.write(handle, b"Hello, World!")?;
+
+// Read data
+let mut buf = vec![0u8; 100];
+let len = context.read(handle, &mut buf)?;
+
+// Close file
+context.close(handle)?;
+```
+
+### WASM Integration
+
+```rust
+// The same API works in WASM environments
+let context = FileContext::new();
+let handle = context.open(&config)?;
+// ... use file operations ...
+```
+
+### SEV-SNP Security
+
+```rust
+// Files are automatically encrypted in SEV-SNP mode
+let config = FileConfig {
+    mode: FileMode::ReadWrite,
+    path: "secure.txt".into(),
+    secure: true, // Enable encryption
+};
+```
+
+## Security Features
+
+- **File Encryption**: AES-GCM encryption for secure file storage
+- **SEV-SNP Integration**: Hardware-backed security for sensitive operations
+- **Secure File Handles**: Protected file handle management
+- **Error Handling**: Secure error reporting without information leakage
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- AMD SEV-SNP technology
+- Rust and WebAssembly communities
+- All contributors and maintainers
