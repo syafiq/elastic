@@ -5,7 +5,7 @@ use aes_gcm::{
     Aes256Gcm, Nonce,
 };
 use rand::RngCore;
-use std::path::Path;
+use std::env;
 use std::cell::UnsafeCell;
 
 #[cfg(feature = "sevsnp")]
@@ -36,24 +36,29 @@ unsafe impl Sync for WasmCrypto {}
 impl WasmCrypto {
     pub fn new() -> Self {
         println!("Checking SEV-SNP availability...");
-        let is_sevsnp = Path::new("/dev/sev-guest").exists();
-        println!("SEV-SNP {} available", if is_sevsnp { "is" } else { "is not" });
-
-        #[cfg(feature = "sevsnp")]
-        if is_sevsnp {
-            if let Ok(rng) = SevsnpRng::new() {
-                return Self {
-                    inner: UnsafeCell::new(WasmCryptoInner {
-                        is_sevsnp: true,
-                        rng: Some(rng),
-                        aes: None,
-                    }),
-                };
-            }
-        }
+        let is_sevsnp = env::var("ELASTIC_SEV_SNP").map(|v| v == "1").unwrap_or(false);
+        println!("SEV-SNP environment: {}", is_sevsnp);
 
         #[cfg(feature = "sevsnp")]
         {
+            if is_sevsnp {
+                match SevsnpRng::new() {
+                    Ok(rng) => {
+                        println!("SEV-SNP RNG initialized successfully");
+                        return Self {
+                            inner: UnsafeCell::new(WasmCryptoInner {
+                                is_sevsnp: true,
+                                rng: Some(rng),
+                                aes: None,
+                            }),
+                        };
+                    }
+                    Err(e) => {
+                        println!("Failed to initialize SEV-SNP RNG: {:?}", e);
+                    }
+                }
+            }
+            
             Self {
                 inner: UnsafeCell::new(WasmCryptoInner {
                     is_sevsnp: false,
@@ -133,7 +138,9 @@ impl WasmCrypto {
 
 impl Crypto for WasmCrypto {
     fn generate_key(&self) -> Result<Vec<u8>, Error> {
-        if self.is_sevsnp() {
+        // SAFETY: We're in a single-threaded WASM context
+        let inner = unsafe { &*self.inner.get() };
+        if inner.is_sevsnp {
             println!("Using SEV-SNP key generation");
             self.generate_sevsnp_key()
         } else {
@@ -149,7 +156,9 @@ impl Crypto for WasmCrypto {
             return Err(Error::InvalidKeyLength);
         }
 
-        if self.is_sevsnp() {
+        // SAFETY: We're in a single-threaded WASM context
+        let inner = unsafe { &*self.inner.get() };
+        if inner.is_sevsnp {
             println!("Using SEV-SNP encryption");
             self.encrypt_sevsnp(key, data, mode)
         } else {
@@ -171,7 +180,9 @@ impl Crypto for WasmCrypto {
             return Err(Error::InvalidKeyLength);
         }
 
-        if self.is_sevsnp() {
+        // SAFETY: We're in a single-threaded WASM context
+        let inner = unsafe { &*self.inner.get() };
+        if inner.is_sevsnp {
             println!("Using SEV-SNP decryption");
             self.decrypt_sevsnp(key, data, mode)
         } else {
