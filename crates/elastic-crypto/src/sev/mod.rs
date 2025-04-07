@@ -1,47 +1,41 @@
-use crate::Error;
+#[cfg(target_os = "linux")]
 use sev::firmware::guest::Firmware;
-use sev::firmware::guest::GuestFieldSelect;
-use std::path::Path;
+use crate::Error;
 use std::io;
 
 // SEV-SNP specific implementation
+#[derive(Debug)]
 pub struct SevsnpRng {
+    #[cfg(target_os = "linux")]
     firmware: Firmware,
-    counter: u32,
 }
 
 impl SevsnpRng {
     pub fn new() -> Result<Self, Error> {
-        // Check if we're in a SEV-SNP environment
-        if !Path::new("/dev/sev-guest").exists() {
-            return Err(Error::SevsnpNotAvailable);
+        #[cfg(target_os = "linux")]
+        {
+            let firmware = Firmware::open().map_err(|_| Error::SevsnpNotAvailable)?;
+            Ok(Self { firmware })
         }
 
-        // Initialize the SEV firmware interface
-        let firmware = Firmware::open()
-            .map_err(|e| Error::SevsnpOperationFailed(e.to_string()))?;
-
-        Ok(Self { firmware, counter: 0 })
+        #[cfg(not(target_os = "linux"))]
+        {
+            Err(Error::SevsnpNotAvailable)
+        }
     }
 
-    pub fn get_random_bytes(&mut self, len: usize) -> Result<Vec<u8>, Error> {
-        let mut buffer = vec![0u8; len];
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as u32;
-        self.counter = self.counter.wrapping_add(1);
-        let request = sev::firmware::guest::DerivedKey::new(
-            false,
-            GuestFieldSelect(0),
-            self.counter,
-            timestamp,
-            timestamp as u64,
-        );
-        let key = self.firmware.get_derived_key(None, request)
-            .map_err(|e| Error::SevsnpOperationFailed(e.to_string()))?;
-        buffer.copy_from_slice(&key[..len]);
-        Ok(buffer)
+    pub fn get_random_bytes(&mut self, _size: usize) -> Result<Vec<u8>, Error> {
+        #[cfg(target_os = "linux")]
+        {
+            let mut buf = vec![0u8; _size];
+            self.firmware.get_random(&mut buf).map_err(|_| Error::SevsnpNotAvailable)?;
+            Ok(buf)
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        {
+            Err(Error::SevsnpNotAvailable)
+        }
     }
 }
 
@@ -62,168 +56,87 @@ impl rand::RngCore for SevsnpRng {
         self.try_fill_bytes(dest).unwrap();
     }
 
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as u32;
-        self.counter = self.counter.wrapping_add(1);
-        let request = sev::firmware::guest::DerivedKey::new(
-            false,
-            GuestFieldSelect(0),
-            self.counter,
-            timestamp,
-            timestamp as u64,
-        );
-        let key = self.firmware.get_derived_key(None, request)
-            .map_err(|e| rand::Error::new(io::Error::new(io::ErrorKind::Other, e.to_string())))?;
-        dest.copy_from_slice(&key[..dest.len()]);
-        Ok(())
+    fn try_fill_bytes(&mut self, _dest: &mut [u8]) -> Result<(), rand::Error> {
+        #[cfg(target_os = "linux")]
+        {
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as u32;
+            let request = sev::firmware::guest::DerivedKey::new(
+                false,
+                sev::firmware::guest::GuestFieldSelect(0),
+                timestamp,
+                timestamp,
+                timestamp as u64,
+            );
+            let key = self.firmware.get_derived_key(None, request)
+                .map_err(|e| rand::Error::new(io::Error::new(io::ErrorKind::Other, e.to_string())))?;
+            _dest.copy_from_slice(&key[.._dest.len()]);
+            Ok(())
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        {
+            Err(rand::Error::new(io::Error::new(io::ErrorKind::Other, "SEV-SNP not available")))
+        }
     }
 }
 
 // SEV-SNP specific AES implementation
+#[derive(Debug)]
 pub struct SevsnpAes {
+    #[cfg(target_os = "linux")]
     firmware: Firmware,
-    key: Vec<u8>,
+    _key: Vec<u8>,
 }
 
 impl SevsnpAes {
     pub fn new(key: &[u8]) -> Result<Self, Error> {
-        // Check if we're in a SEV-SNP environment
-        if !Path::new("/dev/sev-guest").exists() {
-            return Err(Error::SevsnpNotAvailable);
+        #[cfg(target_os = "linux")]
+        {
+            let firmware = Firmware::open().map_err(|_| Error::SevsnpNotAvailable)?;
+            Ok(Self {
+                firmware,
+                _key: key.to_vec(),
+            })
         }
 
-        // Validate key length
-        if key.len() != 32 {
-            return Err(Error::InvalidKeyLength);
+        #[cfg(not(target_os = "linux"))]
+        {
+            Ok(Self {
+                _key: key.to_vec(),
+            })
         }
-
-        // Initialize the SEV firmware interface
-        let firmware = Firmware::open()
-            .map_err(|e| Error::SevsnpOperationFailed(e.to_string()))?;
-
-        Ok(Self {
-            firmware,
-            key: key.to_vec(),
-        })
     }
 
-    pub fn encrypt(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
-        // Generate random IV using SEV-SNP RNG
-        let mut iv = [0u8; 12];
-        let request = sev::firmware::guest::DerivedKey::new(false, GuestFieldSelect(0), 0, 0, 0);
-        let key_bytes = self.firmware.get_derived_key(None, request)
-            .map_err(|e| Error::SevsnpOperationFailed(e.to_string()))?;
-        iv.copy_from_slice(&key_bytes[..12]);
-
-        // Create a derived key for encryption using our key and IV
-        let mut key_data = Vec::with_capacity(self.key.len() + iv.len());
-        key_data.extend_from_slice(&self.key);
-        key_data.extend_from_slice(&iv);
-        
-        let request = sev::firmware::guest::DerivedKey::new(
-            false,
-            GuestFieldSelect(0),
-            0,
-            key_data.len() as u32,
-            key_data.as_ptr() as u64,
-        );
-        
-        // Get the derived key for encryption
-        let key_bytes = self.firmware.get_derived_key(None, request)
-            .map_err(|e| Error::SevsnpOperationFailed(e.to_string()))?;
-
-        // Encrypt using the derived key
-        let mut ciphertext = vec![0u8; data.len()];
-        for (i, byte) in data.iter().enumerate() {
-            ciphertext[i] = byte ^ key_bytes[i % key_bytes.len()];
+    pub fn encrypt(&mut self, _data: &[u8]) -> Result<Vec<u8>, Error> {
+        #[cfg(target_os = "linux")]
+        {
+            let mut output = vec![0u8; _data.len()];
+            self.firmware.encrypt(&self._key, _data, &mut output)
+                .map_err(|_| Error::EncryptionError)?;
+            Ok(output)
         }
 
-        // Generate authentication tag
-        let mut tag_data = Vec::with_capacity(self.key.len() + ciphertext.len());
-        tag_data.extend_from_slice(&self.key);
-        tag_data.extend_from_slice(&ciphertext);
-        
-        let tag_request = sev::firmware::guest::DerivedKey::new(
-            false,
-            GuestFieldSelect(0),
-            0,
-            tag_data.len() as u32,
-            tag_data.as_ptr() as u64,
-        );
-        
-        let tag_key = self.firmware.get_derived_key(None, tag_request)
-            .map_err(|e| Error::SevsnpOperationFailed(e.to_string()))?;
-        
-        let mut tag = [0u8; 16];
-        tag.copy_from_slice(&tag_key[..16]);
-
-        // Combine IV, ciphertext, and tag
-        let mut result = Vec::with_capacity(12 + ciphertext.len() + 16);
-        result.extend_from_slice(&iv);
-        result.extend_from_slice(&ciphertext);
-        result.extend_from_slice(&tag);
-        Ok(result)
+        #[cfg(not(target_os = "linux"))]
+        {
+            Err(Error::SevsnpNotAvailable)
+        }
     }
 
-    pub fn decrypt(&mut self, ciphertext: &[u8]) -> Result<Vec<u8>, Error> {
-        if ciphertext.len() < 28 { // 12 bytes IV + 16 bytes tag
-            return Err(Error::InvalidCiphertext);
+    pub fn decrypt(&mut self, _data: &[u8]) -> Result<Vec<u8>, Error> {
+        #[cfg(target_os = "linux")]
+        {
+            let mut output = vec![0u8; _data.len()];
+            self.firmware.decrypt(&self._key, _data, &mut output)
+                .map_err(|_| Error::DecryptionError)?;
+            Ok(output)
         }
 
-        // Extract IV, encrypted data, and tag
-        let iv = &ciphertext[..12];
-        let encrypted = &ciphertext[12..ciphertext.len() - 16];
-        let tag = &ciphertext[ciphertext.len() - 16..];
-
-        // Verify the authentication tag
-        let mut tag_data = Vec::with_capacity(self.key.len() + encrypted.len());
-        tag_data.extend_from_slice(&self.key);
-        tag_data.extend_from_slice(encrypted);
-        
-        let tag_request = sev::firmware::guest::DerivedKey::new(
-            false,
-            GuestFieldSelect(0),
-            0,
-            tag_data.len() as u32,
-            tag_data.as_ptr() as u64,
-        );
-        
-        let tag_key = self.firmware.get_derived_key(None, tag_request)
-            .map_err(|e| Error::SevsnpOperationFailed(e.to_string()))?;
-        
-        let mut computed_tag = [0u8; 16];
-        computed_tag.copy_from_slice(&tag_key[..16]);
-        
-        if tag != computed_tag {
-            return Err(Error::DecryptionFailed);
+        #[cfg(not(target_os = "linux"))]
+        {
+            Err(Error::SevsnpNotAvailable)
         }
-
-        // Create a derived key for decryption using our key and IV
-        let mut key_data = Vec::with_capacity(self.key.len() + iv.len());
-        key_data.extend_from_slice(&self.key);
-        key_data.extend_from_slice(iv);
-        
-        let request = sev::firmware::guest::DerivedKey::new(
-            false,
-            GuestFieldSelect(0),
-            0,
-            key_data.len() as u32,
-            key_data.as_ptr() as u64,
-        );
-        
-        // Get the derived key for decryption
-        let key_bytes = self.firmware.get_derived_key(None, request)
-            .map_err(|e| Error::SevsnpOperationFailed(e.to_string()))?;
-
-        // Decrypt using the derived key
-        let mut plaintext = vec![0u8; encrypted.len()];
-        for (i, byte) in encrypted.iter().enumerate() {
-            plaintext[i] = byte ^ key_bytes[i % key_bytes.len()];
-        }
-
-        Ok(plaintext)
     }
 } 
