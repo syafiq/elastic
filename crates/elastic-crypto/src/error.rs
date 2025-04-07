@@ -14,6 +14,12 @@ pub enum Error {
     #[error("Unsupported operation")]
     UnsupportedOperation,
     
+    #[error("Key not found")]
+    KeyNotFound,
+    
+    #[error("Operation not permitted")]
+    OperationNotPermitted,
+    
     #[error("SEV-SNP not available")]
     SevsnpNotAvailable,
     
