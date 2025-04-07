@@ -68,10 +68,11 @@ Each crate follows a similar structure:
 
 ### Crypto Interface (`elastic-crypto`)
 - Symmetric encryption/decryption (AES-256-GCM)
-- Asymmetric encryption/decryption (RSA-2048)
-- Digital signing and verification with SHA-256 hashing
-- Cryptographic hashing (SHA-256, SHA-512)
-- Message Authentication Code (HMAC-SHA-256)
+  - Linux: Software implementation using `aes-gcm` crate
+  - SEV-SNP: Hardware-accelerated implementation using SEV firmware
+- Random number generation
+  - Linux: System RNG using `rand` crate
+  - SEV-SNP: Hardware RNG with timestamp-based entropy
 - Key management and context handling
 - WebAssembly Interface Types (WIT) support for language interoperability
 
@@ -90,7 +91,7 @@ Each crate follows a similar structure:
 |-----------|-------|---------|-----|-------|
 | Clock     | ✅    | ✅      | ❌  | SEV-SNP uses TSC, Linux uses system calls |
 | File      | ✅    | ⏳      | ❌  | SEV-SNP implementation in progress |
-| Crypto    | ✅    | ⏳      | ❌  | SEV-SNP implementation in progress |
+| Crypto    | ✅    | ✅      | ❌  | SEV-SNP uses hardware-accelerated RNG and AES |
 | TLS       | ⏳    | ⏳      | ❌  | Planning phase for both platforms |
 
 Legend:

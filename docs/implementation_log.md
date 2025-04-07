@@ -9,7 +9,7 @@ ELASTIC (Enclave Layer for Secure Time, Information, and Cryptography) is a Hard
 |-----------|-------|---------|-----|-------|
 | Clock     | ✅    | ✅      | ❌  | SEV-SNP uses TSC, Linux uses system calls |
 | File      | ✅    | ⏳      | ❌  | SEV-SNP implementation in progress |
-| Crypto    | ✅    | ⏳      | ❌  | SEV-SNP implementation in progress |
+| Crypto    | ✅    | ✅      | ❌  | SEV-SNP uses hardware-accelerated RNG and AES |
 | TLS       | ⏳    | ⏳      | ❌  | Planning phase for both platforms |
 
 Legend:
@@ -129,6 +129,25 @@ Legend:
   - Need to test server connections
   - Need to test certificate verification
   - Need to test error handling
+
+### SEV-SNP Crypto Implementation
+- ✅ Implemented SEV-SNP specific RNG functionality
+  - Added hardware RNG support using SEV firmware
+  - Implemented counter-based entropy enhancement
+  - Added timestamp-based entropy for additional security
+  - Implemented RngCore trait for standard Rust RNG interface
+  - Added comprehensive error handling for RNG operations
+- ✅ Implemented SEV-SNP specific AES functionality
+  - Added hardware-accelerated AES support using SEV firmware
+  - Implemented secure key derivation for encryption/decryption
+  - Added authentication tag generation and verification
+  - Implemented IV generation using hardware RNG
+  - Added comprehensive error handling for AES operations
+- ✅ Created comprehensive tests
+  - Tested RNG functionality with entropy verification
+  - Tested AES encryption/decryption with various data sizes
+  - Tested error handling for invalid inputs
+  - All tests passing successfully
 
 ## Current Status
 - Clock Interface: Complete and tested
