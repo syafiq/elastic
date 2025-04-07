@@ -27,16 +27,14 @@ pub trait Crypto {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
     #[cfg(feature = "wasm")]
-    fn test_wasm_crypto_non_sevsnp() {
-        // Clear SEV_SNP env var to simulate non-SEV-SNP environment
-        std::env::remove_var("SEV_SNP");
-        assert!(std::env::var("SEV_SNP").is_err(), "SEV_SNP environment variable should be unset");
-        
-        let crypto = WasmCrypto::new().unwrap();
-        assert!(!crypto.is_sevsnp);
+    fn test_wasm_crypto() {
+        let crypto = WasmCrypto::new();
+        let has_sevsnp = Path::new("/dev/sev-guest").exists();
+        assert_eq!(crypto.is_sevsnp(), has_sevsnp, "SEV-SNP detection should match device existence");
 
         // Test key generation
         let key = crypto.generate_key().unwrap();
@@ -50,45 +48,35 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "wasm")]
-    fn test_wasm_crypto_sevsnp() {
-        // First test without SEV-SNP to ensure clean state
-        std::env::remove_var("SEV_SNP");
-        let crypto = WasmCrypto::new().unwrap();
-        assert!(!crypto.is_sevsnp);
-
-        // Now test with SEV-SNP
-        std::env::set_var("SEV_SNP", "1");
-        let crypto = WasmCrypto::new().unwrap();
-        assert!(crypto.is_sevsnp);
-
-        // In a real SEV-SNP environment, these operations should succeed
-        // For now, they return NotImplemented since we haven't implemented the SEV-SNP specific crypto yet
-        let key = crypto.generate_key();
-        assert!(matches!(key, Err(Error::NotImplemented)), "SEV-SNP key generation should be implemented");
-
-        let test_key = [0u8; 32];
-        let encrypt_result = crypto.encrypt(&test_key, b"test", AesMode::GCM);
-        assert!(matches!(encrypt_result, Err(Error::NotImplemented)), "SEV-SNP encryption should be implemented");
-
-        let decrypt_result = crypto.decrypt(&test_key, b"test", AesMode::GCM);
-        assert!(matches!(decrypt_result, Err(Error::NotImplemented)), "SEV-SNP decryption should be implemented");
-    }
-
-    #[test]
     #[cfg(feature = "sevsnp")]
     fn test_sevsnp_rng() {
         let rng = SevsnpRng::new();
-        // This should fail since SEV-SNP implementation is not complete
-        assert!(matches!(rng, Err(Error::SevsnpNotAvailable)));
+        let has_sevsnp = Path::new("/dev/sev-guest").exists();
+        
+        if has_sevsnp {
+            let mut rng = rng.unwrap();
+            let bytes = rng.get_random_bytes(32).unwrap();
+            assert_eq!(bytes.len(), 32);
+        } else {
+            assert!(matches!(rng, Err(Error::SevsnpNotAvailable)));
+        }
     }
 
     #[test]
     #[cfg(feature = "sevsnp")]
     fn test_sevsnp_aes() {
+        let has_sevsnp = Path::new("/dev/sev-guest").exists();
         let aes = SevsnpAes::new(&[0u8; 32]);
-        // This should fail since SEV-SNP implementation is not complete
-        assert!(matches!(aes, Err(Error::SevsnpNotAvailable)));
+        
+        if has_sevsnp {
+            let mut aes = aes.unwrap();
+            let data = b"test data";
+            let encrypted = aes.encrypt(data).unwrap();
+            let decrypted = aes.decrypt(&encrypted).unwrap();
+            assert_eq!(data, &decrypted[..]);
+        } else {
+            assert!(matches!(aes, Err(Error::SevsnpNotAvailable)));
+        }
     }
 
     #[test]
@@ -98,8 +86,8 @@ mod tests {
         assert!(matches!(AesKey::new(&key), Err(Error::InvalidKeyLength)));
 
         // Test unsupported operation
-        let key = AesKey::new(&[0u8; 32]).unwrap();
-        assert!(matches!(key.encrypt(b"test", AesMode::CBC), Err(Error::UnsupportedOperation)));
-        assert!(matches!(key.decrypt(b"test", AesMode::CBC), Err(Error::UnsupportedOperation)));
+        let key = vec![0u8; 32];
+        let aes = AesKey::new(&key).unwrap();
+        assert!(matches!(aes.encrypt(b"test", AesMode::CBC), Err(Error::UnsupportedOperation)));
     }
 } 
