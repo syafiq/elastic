@@ -25,13 +25,17 @@ impl SevsnpRng {
 
     pub fn get_random_bytes(&mut self, len: usize) -> Result<Vec<u8>, Error> {
         let mut buffer = vec![0u8; len];
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as u32;
         self.counter = self.counter.wrapping_add(1);
         let request = sev::firmware::guest::DerivedKey::new(
             false,
             GuestFieldSelect(0),
             self.counter,
-            0,
-            0,
+            timestamp,
+            timestamp as u64,
         );
         let key = self.firmware.get_derived_key(None, request)
             .map_err(|e| Error::SevsnpOperationFailed(e.to_string()))?;
@@ -58,13 +62,17 @@ impl rand::RngCore for SevsnpRng {
     }
 
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as u32;
         self.counter = self.counter.wrapping_add(1);
         let request = sev::firmware::guest::DerivedKey::new(
             false,
             GuestFieldSelect(0),
             self.counter,
-            0,
-            0,
+            timestamp,
+            timestamp as u64,
         );
         let key = self.firmware.get_derived_key(None, request)
             .map_err(|e| rand::Error::new(io::Error::new(io::ErrorKind::Other, e.to_string())))?;
