@@ -1199,6 +1199,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sev-file-example"
+version = "0.1.0"
+dependencies = [
+ "elastic-file",
+]
+
+[[package]]
 name = "sha2"
 version = "0.10.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1684,6 +1691,13 @@ checksum = "80bb72f02e7fbf07183443b27b0f3d4144abf8c114189f2e088ed95b696a7822"
 dependencies = [
  "leb128fmt",
  "wasmparser 0.227.1",
+]
+
+[[package]]
+name = "wasm-file-example"
+version = "0.1.0"
+dependencies = [
+ "elastic-file",
 ]
 
 [[package]]

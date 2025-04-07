@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write, Seek, SeekFrom};
-use std::os::unix::fs::MetadataExt;
 use std::sync::Mutex;
-
-use crate::common::{FileConfig, FileMetadata, FileMode};
+use std::collections::HashMap;
+use crate::common::{FileError, FileMode, FileConfig, FileMetadata};
 
 pub struct FileManager {
     files: Mutex<HashMap<u32, FileHandle>>,
@@ -24,9 +24,9 @@ impl FileManager {
         }
     }
 
-    pub fn open(&self, config: &FileConfig) -> Result<u32, String> {
-        let mut files = self.files.lock().map_err(|e| e.to_string())?;
-        let mut next_handle = self.next_handle.lock().map_err(|e| e.to_string())?;
+    pub fn open(&self, config: &FileConfig) -> Result<u32, FileError> {
+        let mut files = self.files.lock().map_err(|e| FileError::OperationFailed(e.to_string()))?;
+        let mut next_handle = self.next_handle.lock().map_err(|e| FileError::OperationFailed(e.to_string()))?;
         
         let handle = *next_handle;
         *next_handle += 1;
@@ -37,7 +37,7 @@ impl FileManager {
             .append(matches!(config.mode, FileMode::Append))
             .create(matches!(config.mode, FileMode::Write | FileMode::ReadWrite | FileMode::Append))
             .open(&config.path)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| FileError::IoError(e))?;
 
         let file_handle = FileHandle {
             file,
@@ -48,69 +48,74 @@ impl FileManager {
         Ok(handle)
     }
 
-    pub fn close(&self, handle: u32) -> Result<(), String> {
-        let mut files = self.files.lock().map_err(|e| e.to_string())?;
-        files.remove(&handle).ok_or_else(|| "File not found".to_string())?;
+    pub fn close(&self, handle: u32) -> Result<(), FileError> {
+        let mut files = self.files.lock().map_err(|e| FileError::OperationFailed(e.to_string()))?;
+        files.remove(&handle).ok_or(FileError::NotFound)?;
         Ok(())
     }
 
-    pub fn read(&self, handle: u32, buf: &mut [u8]) -> Result<usize, String> {
-        let files = self.files.lock().map_err(|e| e.to_string())?;
-        let file_handle = files.get(&handle).ok_or_else(|| "File not found".to_string())?;
+    pub fn read(&self, handle: u32, buf: &mut [u8]) -> Result<usize, FileError> {
+        let files = self.files.lock().map_err(|e| FileError::OperationFailed(e.to_string()))?;
+        let file_handle = files.get(&handle).ok_or(FileError::NotFound)?;
 
         if !matches!(file_handle.config.mode, FileMode::Read | FileMode::ReadWrite) {
-            return Err("File not opened for reading".to_string());
+            return Err(FileError::InvalidMode);
         }
 
         let mut file = &file_handle.file;
-        file.read(buf).map_err(|e| e.to_string())
+        file.read(buf).map_err(|e| FileError::IoError(e))
     }
 
-    pub fn write(&self, handle: u32, buf: &[u8]) -> Result<usize, String> {
-        let files = self.files.lock().map_err(|e| e.to_string())?;
-        let file_handle = files.get(&handle).ok_or_else(|| "File not found".to_string())?;
+    pub fn write(&self, handle: u32, buf: &[u8]) -> Result<usize, FileError> {
+        let files = self.files.lock().map_err(|e| FileError::OperationFailed(e.to_string()))?;
+        let file_handle = files.get(&handle).ok_or(FileError::NotFound)?;
 
         if !matches!(file_handle.config.mode, FileMode::Write | FileMode::ReadWrite | FileMode::Append) {
-            return Err("File not opened for writing".to_string());
+            return Err(FileError::InvalidMode);
         }
 
         let mut file = &file_handle.file;
-        file.write(buf).map_err(|e| e.to_string())
+        file.write(buf).map_err(|e| FileError::IoError(e))
     }
 
-    pub fn seek(&self, handle: u32, offset: i64, whence: i32) -> Result<u64, String> {
-        let files = self.files.lock().map_err(|e| e.to_string())?;
-        let file_handle = files.get(&handle).ok_or_else(|| "File not found".to_string())?;
+    pub fn seek(&self, handle: u32, offset: i64, whence: i32) -> Result<u64, FileError> {
+        let files = self.files.lock().map_err(|e| FileError::OperationFailed(e.to_string()))?;
+        let file_handle = files.get(&handle).ok_or(FileError::NotFound)?;
 
         let mut file = &file_handle.file;
         let seek_from = match whence {
             0 => SeekFrom::Start(offset as u64),
             1 => SeekFrom::Current(offset),
             2 => SeekFrom::End(offset),
-            _ => return Err("Invalid seek whence".to_string()),
+            _ => return Err(FileError::OperationFailed("Invalid seek whence".to_string())),
         };
 
-        file.seek(seek_from).map_err(|e| e.to_string())
+        file.seek(seek_from).map_err(|e| FileError::IoError(e))
     }
 
-    pub fn flush(&self, handle: u32) -> Result<(), String> {
-        let files = self.files.lock().map_err(|e| e.to_string())?;
-        let file_handle = files.get(&handle).ok_or_else(|| "File not found".to_string())?;
+    pub fn flush(&self, handle: u32) -> Result<(), FileError> {
+        let files = self.files.lock().map_err(|e| FileError::OperationFailed(e.to_string()))?;
+        let file_handle = files.get(&handle).ok_or(FileError::NotFound)?;
 
         let mut file = &file_handle.file;
-        file.flush().map_err(|e| e.to_string())
+        file.flush().map_err(|e| FileError::IoError(e))
     }
 
-    pub fn metadata(&self, handle: u32) -> Result<FileMetadata, String> {
-        let files = self.files.lock().map_err(|e| e.to_string())?;
-        let file_handle = files.get(&handle).ok_or_else(|| "File not found".to_string())?;
-
-        let metadata = file_handle.file.metadata().map_err(|e| e.to_string())?;
+    pub fn metadata(&self, handle: u32) -> Result<FileMetadata, FileError> {
+        let files = self.files.lock().map_err(|e| FileError::OperationFailed(e.to_string()))?;
+        let file_handle = files.get(&handle).ok_or(FileError::InvalidHandle)?;
+        
+        let metadata = std::fs::metadata(&file_handle.config.path)
+            .map_err(|e| FileError::IoError(e))?;
+        
         Ok(FileMetadata {
             size: metadata.len(),
             is_file: metadata.is_file(),
             is_dir: metadata.is_dir(),
+            #[cfg(unix)]
             permissions: metadata.mode(),
+            #[cfg(not(unix))]
+            permissions: 0o644, // Default permissions for non-Unix systems
         })
     }
 } 

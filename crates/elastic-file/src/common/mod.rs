@@ -3,14 +3,22 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum FileError {
-    #[error("Invalid file configuration")]
-    InvalidConfig,
     #[error("File not found")]
     NotFound,
-    #[error("Permission denied")]
-    PermissionDenied,
+    #[error("Invalid file handle")]
+    InvalidHandle,
+    #[error("Invalid file mode")]
+    InvalidMode,
     #[error("Operation failed: {0}")]
     OperationFailed(String),
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
+}
+
+impl From<String> for FileError {
+    fn from(err: String) -> Self {
+        FileError::OperationFailed(err)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -19,6 +27,12 @@ pub enum FileMode {
     Write,
     ReadWrite,
     Append,
+}
+
+impl FileMode {
+    pub fn can_write(&self) -> bool {
+        matches!(self, FileMode::Write | FileMode::ReadWrite | FileMode::Append)
+    }
 }
 
 #[derive(Debug, Clone)]

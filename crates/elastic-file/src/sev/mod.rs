@@ -4,12 +4,9 @@ use std::sync::Mutex;
 use std::path::PathBuf;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write, Seek, SeekFrom};
-use std::os::unix::fs::PermissionsExt;
-use crate::common::{FileConfig, FileError, FileMetadata, FileOperations, FileMode};
-use aes_gcm::{
-    aead::{Aead, KeyInit},
-    Aes256Gcm, Nonce,
-};
+use aes_gcm::{Aes256Gcm, Nonce};
+use aes_gcm::aead::{Aead, KeyInit};
+use crate::common::{FileError, FileMode, FileConfig, FileOperations, FileMetadata};
 use sev::certs::sev::Usage;
 
 struct FileHandle {
@@ -166,15 +163,15 @@ impl FileOperations for SevFileContext {
     fn metadata(&self, handle: u32) -> Result<FileMetadata, FileError> {
         let files = self.files.lock().map_err(|e| FileError::OperationFailed(e.to_string()))?;
         let file_handle = files.get(&handle).ok_or(FileError::NotFound)?;
-
-        let file = file_handle.file.as_ref().ok_or(FileError::OperationFailed("File not open".to_string()))?;
-        let metadata = file.metadata().map_err(|e| FileError::OperationFailed(format!("Failed to get metadata: {}", e)))?;
-
+        
+        let metadata = std::fs::metadata(&file_handle.path)
+            .map_err(|e| FileError::IoError(e))?;
+        
         Ok(FileMetadata {
             size: metadata.len(),
             is_file: metadata.is_file(),
             is_dir: metadata.is_dir(),
-            permissions: metadata.permissions().mode(),
+            permissions: 0o644, // Default permissions for all systems in SEV mode
         })
     }
 } 

@@ -6,6 +6,8 @@ members = [
     "crates/elastic-tls",
     "examples/wasm-clock-example",
     "examples/wasm-crypto-example",
+    "examples/sev-file-example",
+    "examples/wasm-file-example"
 ]
 resolver = "2"
 
@@ -13,4 +15,12 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 authors = ["Elastic Security"]
-description = "ELASTIC: Extensible Library for Attestation, Security, and Trusted I/O in the Cloud" 
+description = "ELASTIC: Extensible Library for Attestation, Security, and Trusted I/O in the Cloud"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+thiserror = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+libc = "0.2"
+aes-gcm = "0.10"
+sev = { version = "6.0", features = ["snp"] } 
