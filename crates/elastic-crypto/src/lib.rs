@@ -16,7 +16,7 @@ pub use linux::*;
 #[cfg(feature = "wasm")]
 pub use wasm::*;
 #[cfg(feature = "sevsnp")]
-pub use sev::*;
+pub use sev::{SevsnpRng, SevsnpAes};
 
 pub trait Crypto {
     fn generate_key(&self) -> Result<Vec<u8>, Error>;
