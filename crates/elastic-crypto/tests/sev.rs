@@ -1,5 +1,4 @@
-use elastic_crypto::sev::{SevsnpRng, SevsnpAes};
-use elastic_crypto::error::Error;
+use elastic_crypto::{SevsnpRng, SevsnpAes, Error};
 
 #[test]
 fn test_sevsnp_rng() -> Result<(), Error> {
@@ -64,7 +63,7 @@ fn test_sevsnp_aes_invalid_ciphertext() {
     let result = aes.decrypt(&[0u8; 10]);
     assert!(matches!(result, Err(Error::InvalidCiphertext)));
     
-    // Test with invalid ciphertext format
+    // Test with invalid ciphertext format (correct length but invalid data)
     let result = aes.decrypt(&[0u8; 50]);
-    assert!(matches!(result, Err(Error::SevsnpOperationFailed(_))));
+    assert!(matches!(result, Err(Error::DecryptionFailed)));
 } 
