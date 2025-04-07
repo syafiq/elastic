@@ -345,7 +345,9 @@ dependencies = [
 name = "elastic-file"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm",
  "libc",
+ "sev",
  "tempfile",
  "thiserror",
  "tokio",

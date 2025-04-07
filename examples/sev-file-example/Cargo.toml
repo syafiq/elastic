@@ -1,0 +1,7 @@
+[package]
+name = "sev-file-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+elastic-file = { path = "../../crates/elastic-file", features = ["sev", "sevsnp"] } 

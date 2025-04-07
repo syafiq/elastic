@@ -3,12 +3,14 @@ name = "elastic-file"
 version = "0.1.0"
 edition = "2021"
 authors = ["Your Name <your.email@example.com>"]
-description = "A file operations library for ELASTIC"
+description = "Secure file operations for ELASTIC"
 
 [dependencies]
 thiserror = "1.0"
 tokio = { version = "1.0", features = ["sync", "macros", "io-util", "rt", "time"] }
 libc = "0.2"
+aes-gcm = { version = "0.10", optional = true }
+sev = { version = "6.0", optional = true }
 
 [dev-dependencies]
 tempfile = "3.2"
@@ -17,4 +19,6 @@ tokio-test = "0.4"
 [features]
 default = ["linux"]
 linux = []
-sev = [] 
+sev = ["dep:sev"]
+sevsnp = ["sev", "dep:aes-gcm"]
+wasi = [] 
