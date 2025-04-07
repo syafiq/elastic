@@ -1,20 +1,33 @@
 use crate::Error;
-use rand::thread_rng;
+use sev::firmware::guest::Firmware;
 use std::path::Path;
 
 // SEV-SNP specific implementation
 pub struct SevsnpRng {
-    // Add SEV-SNP specific fields here
-    // This is a placeholder for the actual SEV-SNP RNG implementation
+    firmware: Firmware,
 }
 
 impl SevsnpRng {
     pub fn new() -> Result<Self, Error> {
+        // Check if we're in a SEV-SNP environment
         if !Path::new("/dev/sev-guest").exists() {
             return Err(Error::SevsnpNotAvailable);
         }
-        // Initialize SEV-SNP RNG
-        Ok(Self {})
+
+        // Initialize the SEV firmware interface
+        let firmware = Firmware::open()
+            .map_err(|_| Error::SevsnpNotAvailable)?;
+
+        Ok(Self { firmware })
+    }
+
+    pub fn get_random_bytes(&self, len: usize) -> Result<Vec<u8>, Error> {
+        // Use SEV-SNP's hardware RNG
+        let mut buffer = vec![0u8; len];
+        self.firmware
+            .get_random_bytes(&mut buffer)
+            .map_err(|_| Error::NotImplemented)?;
+        Ok(buffer)
     }
 }
 
@@ -42,29 +55,47 @@ impl rand::RngCore for SevsnpRng {
 
 // SEV-SNP specific AES implementation
 pub struct SevsnpAes {
-    // Add SEV-SNP specific fields here
-    // This is a placeholder for the actual SEV-SNP AES implementation
+    firmware: Firmware,
+    key: Vec<u8>,
 }
 
 impl SevsnpAes {
     pub fn new(key: &[u8]) -> Result<Self, Error> {
+        // Check if we're in a SEV-SNP environment
         if !Path::new("/dev/sev-guest").exists() {
             return Err(Error::SevsnpNotAvailable);
         }
+
+        // Validate key length
         if key.len() != 32 {
             return Err(Error::InvalidKeyLength);
         }
-        // Initialize SEV-SNP AES
-        Ok(Self {})
+
+        // Initialize the SEV firmware interface
+        let firmware = Firmware::open()
+            .map_err(|_| Error::SevsnpNotAvailable)?;
+
+        Ok(Self {
+            firmware,
+            key: key.to_vec(),
+        })
     }
 
-    pub fn encrypt(&self, _data: &[u8]) -> Result<Vec<u8>, Error> {
-        // TODO: Implement SEV-SNP encryption
-        Err(Error::NotImplemented)
+    pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, Error> {
+        // Use SEV-SNP's hardware AES encryption
+        let mut ciphertext = vec![0u8; data.len() + 16]; // Add space for IV and tag
+        self.firmware
+            .aes_encrypt(&self.key, data, &mut ciphertext)
+            .map_err(|_| Error::NotImplemented)?;
+        Ok(ciphertext)
     }
 
-    pub fn decrypt(&self, _encrypted_data: &[u8]) -> Result<Vec<u8>, Error> {
-        // TODO: Implement SEV-SNP decryption
-        Err(Error::NotImplemented)
+    pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, Error> {
+        // Use SEV-SNP's hardware AES decryption
+        let mut plaintext = vec![0u8; ciphertext.len() - 16]; // Remove IV and tag
+        self.firmware
+            .aes_decrypt(&self.key, ciphertext, &mut plaintext)
+            .map_err(|_| Error::NotImplemented)?;
+        Ok(plaintext)
     }
 } 
