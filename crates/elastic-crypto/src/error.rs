@@ -43,4 +43,7 @@ pub enum Error {
     
     #[error("Decryption failed")]
     DecryptionFailed,
+    
+    #[error("Invalid ciphertext")]
+    InvalidCiphertext,
 } 
