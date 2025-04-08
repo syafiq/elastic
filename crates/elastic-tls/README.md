@@ -10,14 +10,16 @@ A secure TLS implementation for the ELASTIC project, supporting multiple platfor
 - Configurable cipher suites
 - Certificate management
 - Secure connection handling
+- Automatic platform detection
+- Comprehensive test suite
 
 ## Platform Support
 
 | Platform | Status | Features |
 |----------|--------|----------|
 | Linux | ✅ | Full TLS 1.2/1.3 support, certificate management |
-| SEV-SNP | ✅ | Hardware-accelerated cryptography, secure enclave support |
-| WASM | ✅ | Browser-compatible TLS, WebSocket support |
+| SEV-SNP | ✅ | Hardware-accelerated cryptography, secure enclave support, attestation |
+| WASM | ✅ | Browser-compatible TLS, WebSocket support, async/await |
 | TDX | ❌ | Not implemented |
 
 ## Usage
@@ -77,6 +79,12 @@ async fn main() {
 }
 ```
 
+The SEV-SNP implementation provides:
+- Hardware-accelerated AES operations
+- Secure memory handling
+- SEV-SNP specific socket implementation
+- Attestation support
+
 ### WASM Support
 
 For browser environments:
@@ -95,6 +103,12 @@ pub async fn connect_to_server() {
     // ... rest of the code
 }
 ```
+
+The WASM implementation provides:
+- WebSocket fallback for browser environments
+- WASM-specific error handling
+- Proper async/await support
+- WASM-specific memory management
 
 ## Building
 
@@ -143,6 +157,15 @@ cargo test --target wasm32-unknown-unknown
 - Keep certificates and private keys secure
 - Enable SEV-SNP hardware acceleration when available
 - Follow best practices for TLS configuration
+- Use secure memory handling in SEV-SNP environments
+- Implement proper attestation verification
+
+## Examples
+
+See the `examples` directory for:
+- Simple client/server implementation
+- WASM client implementation
+- SEV-SNP specific examples
 
 ## License
 
