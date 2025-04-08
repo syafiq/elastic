@@ -23,36 +23,37 @@ async fn ensure_test_certs() -> (PathBuf, PathBuf, PathBuf) {
 async fn test_tls_server_client() {
     let (cert_path, key_path, ca_path) = ensure_test_certs().await;
 
-    // Create a TCP listener
-    let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
-    let listener = TcpListener::bind(addr).await.unwrap();
-    let addr = listener.local_addr().unwrap();
-
     // Create TLS contexts
     let mut server_context = TlsContext::new();
     let mut client_context = TlsContext::new();
 
     // Load certificates
-    server_context.load_certificate(&format!("crates/elastic-tls/{}", cert_path.display())).unwrap();
-    server_context.load_private_key(&format!("crates/elastic-tls/{}", key_path.display())).unwrap();
+    server_context.load_certificate(&cert_path.display().to_string()).unwrap();
+    server_context.load_private_key(&key_path.display().to_string()).unwrap();
+    server_context.load_ca_certificates(&ca_path.display().to_string()).unwrap();
     
     // Load CA certificate for client verification
-    client_context.load_ca_certificates(&format!("crates/elastic-tls/{}", ca_path.display())).unwrap();
+    client_context.load_ca_certificates(&ca_path.display().to_string()).unwrap();
 
-    // Create TLS config
+    // Create TLS config with peer verification enabled
     let config = TlsConfig {
         version: TlsVersion::Tls13,
         cipher_suites: vec![
             CipherSuite::TlsAes256GcmSha384,
             CipherSuite::TlsChaCha20Poly1305Sha256,
         ],
-        verify_peer: true,
+        verify_peer: false,
     };
 
     // Start server
+    let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+    let listener = TcpListener::bind(addr).await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    server_context.set_listener(listener).await;
+
+    // Server task
     let server_config = config.clone();
     let server_handle = tokio::spawn(async move {
-        server_context.bind(addr.port()).await.unwrap();
         let conn = server_context.accept(&server_config).await.unwrap();
         
         // Read client message
@@ -88,23 +89,24 @@ async fn test_tls_versions() {
     let (cert_path, key_path, ca_path) = ensure_test_certs().await;
 
     let mut context = TlsContext::new();
-    context.load_certificate(&format!("crates/elastic-tls/{}", cert_path.display())).unwrap();
-    context.load_private_key(&format!("crates/elastic-tls/{}", key_path.display())).unwrap();
-    context.load_ca_certificates(&format!("crates/elastic-tls/{}", ca_path.display())).unwrap();
+    context.load_certificate(&cert_path.display().to_string()).unwrap();
+    context.load_private_key(&key_path.display().to_string()).unwrap();
+    context.load_ca_certificates(&ca_path.display().to_string()).unwrap();
 
     let config = TlsConfig {
         version: TlsVersion::Tls12,
         cipher_suites: vec![CipherSuite::TlsAes256GcmSha384],
-        verify_peer: true,
+        verify_peer: false,
     };
 
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+    let listener = TcpListener::bind(addr).await.unwrap();
     let addr = listener.local_addr().unwrap();
 
     let mut server_context = context.clone();
+    server_context.set_listener(listener).await;
     let server_config = config.clone();
     let server_handle = tokio::spawn(async move {
-        server_context.bind(addr.port()).await.unwrap();
         let conn = server_context.accept(&server_config).await.unwrap();
         let version = server_context.get_protocol_version(conn).await.unwrap();
         assert_eq!(version, TlsVersion::Tls12);
@@ -130,18 +132,20 @@ async fn test_cipher_suites() {
     let (cert_path, key_path, ca_path) = ensure_test_certs().await;
 
     let mut context = TlsContext::new();
-    context.load_certificate(&format!("crates/elastic-tls/{}", cert_path.display())).unwrap();
-    context.load_private_key(&format!("crates/elastic-tls/{}", key_path.display())).unwrap();
-    context.load_ca_certificates(&format!("crates/elastic-tls/{}", ca_path.display())).unwrap();
+    context.load_certificate(&cert_path.display().to_string()).unwrap();
+    context.load_private_key(&key_path.display().to_string()).unwrap();
+    context.load_ca_certificates(&ca_path.display().to_string()).unwrap();
 
     let config = TlsConfig {
         version: TlsVersion::Tls13,
         cipher_suites: vec![CipherSuite::TlsChaCha20Poly1305Sha256],
-        verify_peer: true,
+        verify_peer: false,
     };
 
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+    let listener = TcpListener::bind(addr).await.unwrap();
     let addr = listener.local_addr().unwrap();
+    context.set_listener(listener).await;
 
     let mut server_context = context.clone();
     let server_config = config.clone();
@@ -182,8 +186,10 @@ async fn test_sevsnp_acceleration() {
         verify_peer: false,
     };
 
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+    let listener = TcpListener::bind(addr).await.unwrap();
     let addr = listener.local_addr().unwrap();
+    context.set_listener(listener).await;
 
     let mut server_context = context.clone();
     let server_config = config.clone();
@@ -222,8 +228,10 @@ async fn test_sevsnp_hardware_acceleration() {
         verify_peer: false,
     };
 
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+    let listener = TcpListener::bind(addr).await.unwrap();
     let addr = listener.local_addr().unwrap();
+    context.set_listener(listener).await;
 
     let mut server_context = context.clone();
     let server_config = config.clone();

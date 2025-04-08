@@ -88,13 +88,6 @@ impl ConnectionManager {
         *guard = Some(listener);
     }
 
-    pub async fn bind(&self, port: u16) -> io::Result<()> {
-        let listener = TcpListener::bind(("0.0.0.0", port)).await?;
-        let mut guard = self.listener.lock().await;
-        *guard = Some(listener);
-        Ok(())
-    }
-
     pub async fn accept(&self, config: Arc<ServerConfig>) -> Result<u32, rustls::Error> {
         let listener = self.listener.lock().await;
         let listener = listener.as_ref()
