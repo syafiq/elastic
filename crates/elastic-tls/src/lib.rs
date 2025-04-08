@@ -171,16 +171,29 @@ impl TlsContext {
     }
 
     pub async fn connect(&self, hostname: &str, port: u16, config: &TlsConfig) -> Result<u32, TlsError> {
+        let mut root_store = rustls::RootCertStore::empty();
+        root_store.add_trust_anchors(
+            webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+                rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                    ta.subject,
+                    ta.spki,
+                    ta.name_constraints,
+                )
+            }),
+        );
+
         let mut client_config = if config.verify_peer {
             let mut root_store = rustls::RootCertStore::empty();
             root_store.add_trust_anchors(
-                webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
-                    rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-                        ta.subject,
-                        ta.spki,
-                        ta.name_constraints,
-                    )
-                })
+                webpki_roots::TLS_SERVER_ROOTS.0
+                    .iter()
+                    .map(|ta| {
+                        rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                            ta.subject,
+                            ta.spki,
+                            ta.name_constraints,
+                        )
+                    }),
             );
 
             ClientConfig::builder()
@@ -278,9 +291,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_tls_context_creation() {
-        let context = TlsContext::new();
-        assert!(context.inner.lock().await.server_config.is_none());
-        assert!(context.inner.lock().await.client_config.is_none());
+        let client_context = TlsContext::new();
+        assert!(client_context.inner.lock().await.client_config.is_none());
+        assert!(client_context.inner.lock().await.server_config.is_none());
     }
 
     #[tokio::test]
