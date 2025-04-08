@@ -1,189 +1,189 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use tokio::sync::Mutex;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio_rustls::{
-    client::TlsStream as ClientTlsStream,
-    server::TlsStream as ServerTlsStream,
-    TlsConnector, TlsAcceptor,
-};
-use rustls::{self, ClientConfig, ServerConfig};
+use tokio_rustls::rustls::{ServerConfig, ClientConfig};
+use tokio_rustls::{TlsAcceptor, TlsConnector};
+use std::sync::Arc;
+use std::io;
 
-pub enum TlsConnection {
-    Client(Box<ClientTlsStream<TcpStream>>),
-    Server(Box<ServerTlsStream<TcpStream>>),
+pub enum TlsStream {
+    Server(tokio_rustls::server::TlsStream<TcpStream>),
+    Client(tokio_rustls::client::TlsStream<TcpStream>),
+}
+
+pub struct TlsConnection {
+    stream: TlsStream,
+}
+
+impl TlsConnection {
+    pub fn new_server(stream: tokio_rustls::server::TlsStream<TcpStream>) -> Self {
+        Self { stream: TlsStream::Server(stream) }
+    }
+
+    pub fn new_client(stream: tokio_rustls::client::TlsStream<TcpStream>) -> Self {
+        Self { stream: TlsStream::Client(stream) }
+    }
+
+    pub async fn read(&mut self, max_size: usize) -> io::Result<Vec<u8>> {
+        use tokio::io::AsyncReadExt;
+        let mut buffer = vec![0; max_size];
+        let n = match &mut self.stream {
+            TlsStream::Server(s) => s.read(&mut buffer).await?,
+            TlsStream::Client(s) => s.read(&mut buffer).await?,
+        };
+        buffer.truncate(n);
+        Ok(buffer)
+    }
+
+    pub async fn write(&mut self, data: &[u8]) -> io::Result<()> {
+        use tokio::io::AsyncWriteExt;
+        match &mut self.stream {
+            TlsStream::Server(s) => s.write_all(data).await,
+            TlsStream::Client(s) => s.write_all(data).await,
+        }
+    }
+
+    pub fn get_peer_certificate(&self) -> Option<Vec<u8>> {
+        match &self.stream {
+            TlsStream::Server(s) => s.get_ref().1.peer_certificates()
+                .map(|certs| certs[0].0.clone()),
+            TlsStream::Client(s) => s.get_ref().1.peer_certificates()
+                .map(|certs| certs[0].0.clone()),
+        }
+    }
+
+    pub fn get_protocol_version(&self) -> Option<rustls::ProtocolVersion> {
+        match &self.stream {
+            TlsStream::Server(s) => s.get_ref().1.protocol_version(),
+            TlsStream::Client(s) => s.get_ref().1.protocol_version(),
+        }
+    }
+
+    pub fn get_cipher_suite(&self) -> Option<rustls::SupportedCipherSuite> {
+        match &self.stream {
+            TlsStream::Server(s) => s.get_ref().1.negotiated_cipher_suite(),
+            TlsStream::Client(s) => s.get_ref().1.negotiated_cipher_suite(),
+        }
+    }
 }
 
 #[derive(Clone)]
 pub struct ConnectionManager {
+    pub(crate) listener: Arc<Mutex<Option<TcpListener>>>,
     connections: Arc<Mutex<HashMap<u32, TlsConnection>>>,
     next_handle: Arc<Mutex<u32>>,
-    listener: Arc<Mutex<Option<Arc<TcpListener>>>>,
 }
 
 impl ConnectionManager {
     pub fn new() -> Self {
         Self {
-            connections: Arc::new(Mutex::new(HashMap::new())),
-            next_handle: Arc::new(Mutex::new(1)),
             listener: Arc::new(Mutex::new(None)),
+            connections: Arc::new(Mutex::new(HashMap::new())),
+            next_handle: Arc::new(Mutex::new(0)),
         }
     }
 
-    pub async fn connect(
-        &self,
-        client_config: Arc<ClientConfig>,
-        hostname: &str,
-        port: u16,
-    ) -> Result<u32, rustls::Error> {
-        let stream = TcpStream::connect((hostname, port)).await
-            .map_err(|e| rustls::Error::General(format!("Failed to connect: {}", e)))?;
-        
-        let domain = rustls::ServerName::try_from(hostname)
-            .map_err(|_| rustls::Error::General("Invalid hostname".to_string()))?;
-        
-        let tls_stream = TlsConnector::from(client_config)
-            .connect(domain, stream)
-            .await
-            .map_err(|e| rustls::Error::General(format!("TLS connection failed: {}", e)))?;
-        
-        let handle = {
-            let mut next_handle = self.next_handle.lock().unwrap();
-            let handle = *next_handle;
-            *next_handle += 1;
-            handle
-        };
-        
-        self.connections.lock().unwrap().insert(handle, TlsConnection::Client(Box::new(tls_stream)));
-        Ok(handle)
+    pub async fn set_listener(&self, listener: TcpListener) {
+        let mut guard = self.listener.lock().await;
+        *guard = Some(listener);
     }
 
-    pub async fn bind(&self, port: u16) -> Result<(), rustls::Error> {
-        println!("Attempting to bind to port {}", port);
-        let listener = TcpListener::bind(("127.0.0.1", port)).await
-            .map_err(|e| rustls::Error::General(format!("Failed to bind to port {}: {}", port, e)))?;
-        println!("Successfully bound to port {}", port);
-        *self.listener.lock().unwrap() = Some(Arc::new(listener));
+    pub async fn bind(&self, port: u16) -> io::Result<()> {
+        let listener = TcpListener::bind(("0.0.0.0", port)).await?;
+        let mut guard = self.listener.lock().await;
+        *guard = Some(listener);
         Ok(())
     }
 
-    pub async fn accept(
-        &self,
-        server_config: Arc<ServerConfig>,
-    ) -> Result<u32, rustls::Error> {
-        let listener = self.listener.lock().unwrap()
-            .as_ref()
-            .ok_or_else(|| rustls::Error::General("No listener bound".to_string()))?
-            .clone();
+    pub async fn accept(&self, config: Arc<ServerConfig>) -> Result<u32, rustls::Error> {
+        let listener = self.listener.lock().await;
+        let listener = listener.as_ref()
+            .ok_or_else(|| rustls::Error::General("No listener bound".to_string()))?;
 
-        println!("Waiting for incoming connection...");
         let (stream, _) = listener.accept().await
-            .map_err(|e| rustls::Error::General(format!("Failed to accept connection: {}", e)))?;
-        println!("Accepted TCP connection, performing TLS handshake...");
-        
-        let tls_stream = TlsAcceptor::from(server_config)
-            .accept(stream)
-            .await
+            .map_err(|e| rustls::Error::General(format!("Accept failed: {}", e)))?;
+
+        let acceptor = TlsAcceptor::from(config);
+        let stream = acceptor.accept(stream).await
             .map_err(|e| rustls::Error::General(format!("TLS accept failed: {}", e)))?;
-        println!("TLS handshake completed successfully");
-        
-        let handle = {
-            let mut next_handle = self.next_handle.lock().unwrap();
-            let handle = *next_handle;
-            *next_handle += 1;
-            handle
-        };
-        
-        self.connections.lock().unwrap().insert(handle, TlsConnection::Server(Box::new(tls_stream)));
-        Ok(handle)
+
+        let mut handle = self.next_handle.lock().await;
+        let connection_handle = *handle;
+        *handle += 1;
+
+        let mut connections = self.connections.lock().await;
+        connections.insert(connection_handle, TlsConnection::new_server(stream));
+
+        Ok(connection_handle)
     }
 
-    pub fn close(&self, handle: u32) -> Result<(), rustls::Error> {
-        let mut connections = self.connections.lock().unwrap();
-        if connections.remove(&handle).is_some() {
-            Ok(())
-        } else {
-            Err(rustls::Error::General("Connection not found".to_string()))
-        }
+    pub async fn connect(&self, config: Arc<ClientConfig>, hostname: &str, port: u16) -> Result<u32, rustls::Error> {
+        let stream = TcpStream::connect((hostname, port)).await
+            .map_err(|e| rustls::Error::General(format!("Connect failed: {}", e)))?;
+
+        let connector = TlsConnector::from(config);
+        let domain = rustls::ServerName::try_from(hostname)
+            .map_err(|_| rustls::Error::General("Invalid hostname".to_string()))?;
+
+        let stream = connector.connect(domain, stream).await
+            .map_err(|e| rustls::Error::General(format!("TLS connect failed: {}", e)))?;
+
+        let mut handle = self.next_handle.lock().await;
+        let connection_handle = *handle;
+        *handle += 1;
+
+        let mut connections = self.connections.lock().await;
+        connections.insert(connection_handle, TlsConnection::new_client(stream));
+
+        Ok(connection_handle)
+    }
+
+    pub async fn close(&self, handle: u32) -> Result<(), rustls::Error> {
+        let mut connections = self.connections.lock().await;
+        connections.remove(&handle)
+            .ok_or_else(|| rustls::Error::General("Connection not found".to_string()))?;
+        Ok(())
     }
 
     pub async fn write(&self, handle: u32, data: &[u8]) -> Result<(), rustls::Error> {
-        let mut connections = self.connections.lock().unwrap();
+        let mut connections = self.connections.lock().await;
         let connection = connections.get_mut(&handle)
             .ok_or_else(|| rustls::Error::General("Connection not found".to_string()))?;
-        
-        match connection {
-            TlsConnection::Client(stream) => {
-                stream.write_all(data).await
-                    .map_err(|e| rustls::Error::General(format!("Write failed: {}", e)))?;
-            }
-            TlsConnection::Server(stream) => {
-                stream.write_all(data).await
-                    .map_err(|e| rustls::Error::General(format!("Write failed: {}", e)))?;
-            }
-        }
-        Ok(())
+
+        connection.write(data).await
+            .map_err(|e| rustls::Error::General(format!("Write failed: {}", e)))
     }
 
     pub async fn read(&self, handle: u32, max_size: usize) -> Result<Vec<u8>, rustls::Error> {
-        let mut connections = self.connections.lock().unwrap();
+        let mut connections = self.connections.lock().await;
         let connection = connections.get_mut(&handle)
             .ok_or_else(|| rustls::Error::General("Connection not found".to_string()))?;
-        
-        let mut buffer = vec![0u8; max_size];
-        let n = match connection {
-            TlsConnection::Client(stream) => {
-                stream.read(&mut buffer).await
-                    .map_err(|e| rustls::Error::General(format!("Read failed: {}", e)))?
-            }
-            TlsConnection::Server(stream) => {
-                stream.read(&mut buffer).await
-                    .map_err(|e| rustls::Error::General(format!("Read failed: {}", e)))?
-            }
-        };
-        
-        buffer.truncate(n);
-        Ok(buffer)
+
+        connection.read(max_size).await
+            .map_err(|e| rustls::Error::General(format!("Read failed: {}", e)))
     }
 
-    pub fn get_peer_certificate(&self, handle: u32) -> Result<Option<Vec<u8>>, rustls::Error> {
-        let connections = self.connections.lock().unwrap();
+    pub async fn get_peer_certificate(&self, handle: u32) -> Result<Option<Vec<u8>>, rustls::Error> {
+        let connections = self.connections.lock().await;
         let connection = connections.get(&handle)
             .ok_or_else(|| rustls::Error::General("Connection not found".to_string()))?;
-        
-        match connection {
-            TlsConnection::Client(stream) => {
-                Ok(stream.get_ref().1.peer_certificates()
-                    .and_then(|certs| certs.first())
-                    .map(|cert| cert.0.clone()))
-            }
-            TlsConnection::Server(stream) => {
-                Ok(stream.get_ref().1.peer_certificates()
-                    .and_then(|certs| certs.first())
-                    .map(|cert| cert.0.clone()))
-            }
-        }
+
+        Ok(connection.get_peer_certificate())
     }
 
-    pub fn get_protocol_version(&self, handle: u32) -> Result<Option<rustls::ProtocolVersion>, rustls::Error> {
-        let connections = self.connections.lock().unwrap();
+    pub async fn get_protocol_version(&self, handle: u32) -> Result<Option<rustls::ProtocolVersion>, rustls::Error> {
+        let connections = self.connections.lock().await;
         let connection = connections.get(&handle)
             .ok_or_else(|| rustls::Error::General("Connection not found".to_string()))?;
-        
-        match connection {
-            TlsConnection::Client(stream) => Ok(stream.get_ref().1.protocol_version()),
-            TlsConnection::Server(stream) => Ok(stream.get_ref().1.protocol_version()),
-        }
+
+        Ok(connection.get_protocol_version())
     }
 
-    pub fn get_cipher_suite(&self, handle: u32) -> Result<Option<rustls::SupportedCipherSuite>, rustls::Error> {
-        let connections = self.connections.lock().unwrap();
+    pub async fn get_cipher_suite(&self, handle: u32) -> Result<Option<rustls::SupportedCipherSuite>, rustls::Error> {
+        let connections = self.connections.lock().await;
         let connection = connections.get(&handle)
             .ok_or_else(|| rustls::Error::General("Connection not found".to_string()))?;
-        
-        match connection {
-            TlsConnection::Client(stream) => Ok(stream.get_ref().1.negotiated_cipher_suite()),
-            TlsConnection::Server(stream) => Ok(stream.get_ref().1.negotiated_cipher_suite()),
-        }
+
+        Ok(connection.get_cipher_suite())
     }
 }

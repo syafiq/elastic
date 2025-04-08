@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>ELASTIC TLS WASM Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .controls {
+            margin: 20px 0;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #output {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            min-height: 200px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ELASTIC TLS WASM Example</h1>
+        <div class="controls">
+            <button id="connect">Connect to Server</button>
+        </div>
+        <div id="output"></div>
+    </div>
+
+    <script type="module">
+        import init, { connect_to_server } from './pkg/wasm_client.js';
+
+        async function run() {
+            await init();
+
+            const output = document.getElementById('output');
+            const connectButton = document.getElementById('connect');
+
+            // Override console.log to write to our output div
+            const originalLog = console.log;
+            console.log = (...args) => {
+                originalLog.apply(console, args);
+                output.textContent += args.join(' ') + '\n';
+            };
+
+            connectButton.addEventListener('click', async () => {
+                output.textContent = ''; // Clear previous output
+                connectButton.disabled = true;
+                try {
+                    await connect_to_server();
+                } catch (e) {
+                    console.log('Error:', e);
+                } finally {
+                    connectButton.disabled = false;
+                }
+            });
+        }
+
+        run().catch(console.error);
+    </script>
+</body>
+</html> 

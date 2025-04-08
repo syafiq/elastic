@@ -1,9 +1,9 @@
-package elastic:tls@0.1.0;
+package elastic:tls
 
 /// TLS error types that can occur during operations
 interface types {
     /// Error variants that can occur during TLS operations
-    variant tls-error {
+    variant error {
         /// Invalid or malformed certificate
         invalid-certificate(string),
         /// Invalid or malformed private key
@@ -20,81 +20,81 @@ interface types {
         unsupported-protocol(string),
         /// Unsupported cipher suite
         unsupported-cipher(string),
+        /// Platform not supported
+        platform-not-supported(string)
     }
 
     /// Supported TLS protocol versions
-    enum tls-version {
+    variant version {
         /// TLS 1.2
-        tls-1-2,
+        tls12,
         /// TLS 1.3
-        tls-1-3,
+        tls13
     }
 
     /// Supported cipher suites
-    enum cipher-suite {
+    variant cipher-suite {
         /// AES-128-GCM with SHA-256
-        tls-aes-128-gcm-sha256,
+        tls-aes128-gcm-sha256,
         /// AES-256-GCM with SHA-384
-        tls-aes-256-gcm-sha384,
+        tls-aes256-gcm-sha384,
         /// ChaCha20-Poly1305 with SHA-256
-        tls-chacha20-poly1305-sha256,
+        tls-chacha20-poly1305-sha256
     }
 
     /// TLS configuration options
-    record tls-config {
+    record config {
         /// TLS protocol version to use
-        version: tls-version,
+        version: version,
         /// List of cipher suites to support
         cipher-suites: list<cipher-suite>,
         /// Whether to verify peer certificates
-        verify-peer: bool,
-        /// Whether to verify hostname
-        verify-hostname: bool,
+        verify-peer: bool
     }
 }
 
 /// TLS interface for secure communication
 interface tls {
-    use types.{tls-error, tls-version, cipher-suite, tls-config};
+    use types.{error, version, cipher-suite, config};
 
-    /// Create a new TLS context with the given configuration
-    create-context: func(config: tls-config) -> result<u32, tls-error>;
+    /// Create a new TLS context
+    constructor: func() -> result<handle, error>;
     
-    /// Destroy a TLS context and free its resources
-    destroy-context: func(handle: u32) -> result<_, tls-error>;
+    /// Load a certificate from a file
+    load-certificate: func(handle: handle, cert-path: string) -> result<unit, error>;
+    
+    /// Load a private key from a file
+    load-private-key: func(handle: handle, key-path: string) -> result<unit, error>;
+    
+    /// Load CA certificates from a file
+    load-ca-certificates: func(handle: handle, ca-path: string) -> result<unit, error>;
 
-    /// Load a certificate into the TLS context
-    load-certificate: func(handle: u32, cert: list<u8>) -> result<_, tls-error>;
+    /// Bind to a port for incoming connections
+    bind: func(handle: handle, port: u16) -> result<unit, error>;
     
-    /// Load a private key into the TLS context
-    load-private-key: func(handle: u32, key: list<u8>) -> result<_, tls-error>;
+    /// Accept an incoming connection
+    accept: func(handle: handle, config: config) -> result<u32, error>;
     
-    /// Load CA certificates for peer verification
-    load-ca-certificates: func(handle: u32, certs: list<u8>) -> result<_, tls-error>;
+    /// Connect to a remote host
+    connect: func(handle: handle, hostname: string, port: u16, config: config) -> result<u32, error>;
+    
+    /// Close a connection
+    close: func(handle: handle, conn: u32) -> result<unit, error>;
 
-    /// Connect to a remote TLS server
-    connect: func(handle: u32, hostname: string, port: u16) -> result<u32, tls-error>;
+    /// Write data to a connection
+    write: func(handle: handle, conn: u32, data: list<u8>) -> result<unit, error>;
     
-    /// Accept incoming TLS connections on a port
-    accept: func(handle: u32, port: u16) -> result<u32, tls-error>;
-    
-    /// Close a TLS connection
-    close: func(conn: u32) -> result<_, tls-error>;
-
-    /// Write data over a TLS connection
-    write: func(conn: u32, data: list<u8>) -> result<u32, tls-error>;
-    
-    /// Read data from a TLS connection
-    read: func(conn: u32, max-size: u32) -> result<list<u8>, tls-error>;
+    /// Read data from a connection
+    read: func(handle: handle, conn: u32, max-size: u32) -> result<list<u8>, error>;
 
     /// Get the peer's certificate
-    get-peer-certificate: func(conn: u32) -> result<list<u8>, tls-error>;
+    get-peer-certificate: func(handle: handle, conn: u32) -> result<option<list<u8>>, error>;
     
-    /// Get the negotiated TLS protocol version
-    get-protocol-version: func(conn: u32) -> result<tls-version, tls-error>;
+    /// Get the negotiated protocol version
+    get-protocol-version: func(handle: handle, conn: u32) -> result<version, error>;
     
     /// Get the negotiated cipher suite
-    get-cipher-suite: func(conn: u32) -> result<cipher-suite, tls-error>;
+    get-cipher-suite: func(handle: handle, conn: u32) -> result<cipher-suite, error>;
 }
 
 /// TLS implementation world
