@@ -88,6 +88,9 @@ Each crate follows a similar structure:
 - Secure data transfer with automatic encryption/decryption
 - Connection information and peer certificate verification
 - WebAssembly Interface Types (WIT) support for language interoperability
+- SEV-SNP hardware acceleration for cryptographic operations
+- WASM support with WebSocket fallback
+- Comprehensive test suite
 
 ## Platform Support
 
@@ -96,7 +99,7 @@ Each crate follows a similar structure:
 | Clock     | ✅    | ✅      | ✅   | ❌  | SEV-SNP uses TSC, Linux uses system calls, WASM uses WASI |
 | File      | ✅    | ✅      | ✅   | ❌  | SEV-SNP and WASM support with AES-GCM encryption |
 | Crypto    | ✅    | ✅      | ✅   | ❌  | SEV-SNP uses hardware-accelerated RNG and AES, WASM supports both modes |
-| TLS       | ⏳    | ⏳      | ⏳   | ❌  | Planning phase for all platforms |
+| TLS       | ✅    | ✅      | ✅   | ❌  | SEV-SNP with hardware acceleration, WASM with WebSocket fallback |
 
 Legend:
 - ✅: Implemented and tested
