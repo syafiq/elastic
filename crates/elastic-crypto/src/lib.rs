@@ -45,7 +45,25 @@ pub struct ElasticCrypto {
 
 impl ElasticCrypto {
     pub fn new() -> Result<Self, Error> {
-        #[cfg(feature = "linux")]
+        #[cfg(all(feature = "linux", feature = "sevsnp"))]
+        {
+            // Check if SEV-SNP is available
+            if std::path::Path::new("/dev/sev-guest").exists() {
+                println!("[ElasticCrypto] Using SEV-SNP backend");
+                let key = vec![0u8; 32];
+                Ok(Self {
+                    backend: CryptoBackend::Sevsnp(SevsnpAes::new(&key)?),
+                })
+            } else {
+                println!("[ElasticCrypto] Using Linux backend");
+                let key = vec![0u8; 32];
+                let aes = AesKey::new(&key)?;
+                Ok(Self {
+                    backend: CryptoBackend::Linux { key, aes },
+                })
+            }
+        }
+        #[cfg(all(feature = "linux", not(feature = "sevsnp")))]
         {
             println!("[ElasticCrypto] Using Linux backend");
             let key = vec![0u8; 32];
@@ -56,21 +74,11 @@ impl ElasticCrypto {
         }
         #[cfg(all(not(feature = "linux"), feature = "sevsnp"))]
         {
-            // Check if SEV-SNP is available
-            if std::path::Path::new("/dev/sev-guest").exists() {
-                println!("[ElasticCrypto] Using SEV-SNP backend");
-                let key = vec![0u8; 32];
-                Ok(Self {
-                    backend: CryptoBackend::Sevsnp(SevsnpAes::new(&key)?),
-                })
-            } else {
-                println!("[ElasticCrypto] SEV-SNP not available, falling back to Linux backend");
-                let key = vec![0u8; 32];
-                let aes = AesKey::new(&key)?;
-                Ok(Self {
-                    backend: CryptoBackend::Linux { key, aes },
-                })
-            }
+            println!("[ElasticCrypto] Using SEV-SNP backend");
+            let key = vec![0u8; 32];
+            Ok(Self {
+                backend: CryptoBackend::Sevsnp(SevsnpAes::new(&key)?),
+            })
         }
         #[cfg(all(not(feature = "linux"), not(feature = "sevsnp"), feature = "wasm"))]
         {
