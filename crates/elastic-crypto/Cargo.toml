@@ -15,6 +15,7 @@ sha2 = "0.10"
 getrandom = { version = "0.2", features = ["js"] }
 tokio = { version = "1.0", features = ["sync", "macros", "io-util", "rt", "time"], optional = true }
 mio = { version = "1.0", optional = true }
+cfg-if = "1.0"
 
 [dev-dependencies]
 anyhow = "1.0"
