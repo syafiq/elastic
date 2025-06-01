@@ -18,6 +18,13 @@ pub use wasm::*;
 #[cfg(feature = "sevsnp")]
 pub use sev::{SevsnpRng, SevsnpAes};
 
+#[cfg(feature = "linux")]
+println!("[ElasticCrypto] Debug: linux module is compiled");
+#[cfg(feature = "sevsnp")]
+println!("[ElasticCrypto] Debug: sevsnp module is compiled");
+#[cfg(feature = "wasm")]
+println!("[ElasticCrypto] Debug: wasm module is compiled");
+
 pub trait Crypto {
     fn generate_key(&self) -> Result<Vec<u8>, Error>;
     fn encrypt(&self, key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error>;
