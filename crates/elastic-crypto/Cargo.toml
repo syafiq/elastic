@@ -28,7 +28,8 @@ sev = { version = "6.0", default-features = false, features = ["snp"], optional 
 default = []
 linux = ["tokio", "mio"]
 wasi = []
-sevsnp = []
+sevsnp = ["sev"]
+wasm = []
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { version = "1.0", default-features = false, features = ["sync", "macros", "io-util", "rt", "time"], optional = true } 

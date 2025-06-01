@@ -1,6 +1,6 @@
 #[cfg(feature = "linux")]
 mod linux;
-#[cfg(feature = "wasi")]
+#[cfg(any(feature = "wasi", feature = "wasm"))]
 pub mod wasm;
 #[cfg(feature = "sevsnp")]
 mod sev;
@@ -13,7 +13,7 @@ pub use aes::{AesKey, AesMode};
 
 #[cfg(feature = "linux")]
 pub use linux::*;
-#[cfg(feature = "wasi")]
+#[cfg(any(feature = "wasi", feature = "wasm"))]
 pub use wasm::*;
 #[cfg(feature = "sevsnp")]
 pub use sev::{SevsnpRng, SevsnpAes};

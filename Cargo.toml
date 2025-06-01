@@ -1,14 +1,9 @@
 [workspace]
 members = [
-    "crates/elastic-clock",
-    "crates/elastic-crypto",
     "crates/elastic-file",
-    "crates/elastic-tls",
-    "examples/wasm-clock-example",
-    "examples/wasm-crypto-example",
-    "examples/sev-file-example",
-    "examples/wasm-file-example",
-    "crates/file-demo"
+    "crates/elastic-crypto",
+    "crates/file-demo",
+    "crates/crypto-demo"
 ]
 resolver = "2"
 
