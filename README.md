@@ -126,6 +126,41 @@ cargo build -p elastic-tls
 cargo build -p wasm-crypto-example --target wasm32-wasip1 --features elastic-crypto/sevsnp
 ```
 
+### Running Demos
+
+The project includes two demo crates that showcase the functionality of the ELASTIC interfaces:
+
+#### File Demo (`file-demo`)
+Demonstrates secure file operations across different platforms:
+```bash
+# Run in Linux mode
+cargo run -p file-demo --features linux
+
+# Run in SEV-SNP mode
+cargo run -p file-demo --features sevsnp
+
+# Run in WASM mode
+cargo run -p file-demo --features wasm
+```
+
+#### Crypto Demo (`crypto-demo`)
+Demonstrates cryptographic operations across different platforms:
+```bash
+# Run in Linux mode
+cargo run -p crypto-demo --features linux
+
+# Run in SEV-SNP mode
+cargo run -p crypto-demo --features sevsnp
+
+# Run in WASM mode
+cargo run -p crypto-demo --features wasm
+```
+
+Note: For SEV-SNP mode, you need to:
+1. Run on an AMD SEV-SNP capable machine
+2. Have the `/dev/sev-guest` device available
+3. Have appropriate permissions to access the device
+
 ### Testing
 ```bash
 # Run all tests
