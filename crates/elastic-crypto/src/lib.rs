@@ -45,8 +45,17 @@ pub struct ElasticCrypto {
 
 impl ElasticCrypto {
     pub fn new() -> Result<Self, Error> {
+        println!("[ElasticCrypto] Debug: Checking features...");
+        #[cfg(feature = "linux")]
+        println!("[ElasticCrypto] Debug: linux feature is enabled");
+        #[cfg(feature = "sevsnp")]
+        println!("[ElasticCrypto] Debug: sevsnp feature is enabled");
+        #[cfg(feature = "wasm")]
+        println!("[ElasticCrypto] Debug: wasm feature is enabled");
+
         #[cfg(all(feature = "linux", feature = "sevsnp"))]
         {
+            println!("[ElasticCrypto] Debug: Both linux and sevsnp features are enabled");
             // Check if SEV-SNP is available
             if std::path::Path::new("/dev/sev-guest").exists() {
                 println!("[ElasticCrypto] Using SEV-SNP backend");
@@ -65,6 +74,7 @@ impl ElasticCrypto {
         }
         #[cfg(all(feature = "linux", not(feature = "sevsnp")))]
         {
+            println!("[ElasticCrypto] Debug: Only linux feature is enabled");
             println!("[ElasticCrypto] Using Linux backend");
             let key = vec![0u8; 32];
             let aes = AesKey::new(&key)?;
@@ -74,6 +84,7 @@ impl ElasticCrypto {
         }
         #[cfg(all(not(feature = "linux"), feature = "sevsnp"))]
         {
+            println!("[ElasticCrypto] Debug: Only sevsnp feature is enabled");
             println!("[ElasticCrypto] Using SEV-SNP backend");
             let key = vec![0u8; 32];
             Ok(Self {
@@ -82,6 +93,7 @@ impl ElasticCrypto {
         }
         #[cfg(all(not(feature = "linux"), not(feature = "sevsnp"), feature = "wasm"))]
         {
+            println!("[ElasticCrypto] Debug: Only wasm feature is enabled");
             println!("[ElasticCrypto] Using WASM backend");
             Ok(Self {
                 backend: CryptoBackend::Wasm(WasmCrypto::new()),
@@ -89,6 +101,7 @@ impl ElasticCrypto {
         }
         #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
         {
+            println!("[ElasticCrypto] Debug: No features are enabled");
             println!("[ElasticCrypto] No supported backend feature enabled");
             Err(Error::UnsupportedOperation)
         }
@@ -109,33 +122,33 @@ impl Crypto for ElasticCrypto {
         }
     }
 
-    fn encrypt(&self, _key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error> {
+    fn encrypt(&self, _key: &[u8], _data: &[u8], _mode: AesMode) -> Result<Vec<u8>, Error> {
         match &self.backend {
             #[cfg(feature = "linux")]
-            CryptoBackend::Linux { aes, .. } => aes.encrypt(data, mode),
+            CryptoBackend::Linux { aes, .. } => aes.encrypt(_data, _mode),
             #[cfg(feature = "sevsnp")]
             CryptoBackend::Sevsnp(backend) => {
                 let mut backend = backend.clone();
-                backend.encrypt(data)
+                backend.encrypt(_data)
             }
             #[cfg(feature = "wasm")]
-            CryptoBackend::Wasm(backend) => backend.encrypt(_key, data, mode),
+            CryptoBackend::Wasm(backend) => backend.encrypt(_key, _data, _mode),
             #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
             CryptoBackend::None => Err(Error::UnsupportedOperation),
         }
     }
 
-    fn decrypt(&self, _key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error> {
+    fn decrypt(&self, _key: &[u8], _data: &[u8], _mode: AesMode) -> Result<Vec<u8>, Error> {
         match &self.backend {
             #[cfg(feature = "linux")]
-            CryptoBackend::Linux { aes, .. } => aes.decrypt(data, mode),
+            CryptoBackend::Linux { aes, .. } => aes.decrypt(_data, _mode),
             #[cfg(feature = "sevsnp")]
             CryptoBackend::Sevsnp(backend) => {
                 let mut backend = backend.clone();
-                backend.decrypt(data)
+                backend.decrypt(_data)
             }
             #[cfg(feature = "wasm")]
-            CryptoBackend::Wasm(backend) => backend.decrypt(_key, data, mode),
+            CryptoBackend::Wasm(backend) => backend.decrypt(_key, _data, _mode),
             #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
             CryptoBackend::None => Err(Error::UnsupportedOperation),
         }
