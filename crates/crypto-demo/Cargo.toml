@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-elastic-crypto = { path = "../elastic-crypto" }
+elastic-crypto = { path = "../elastic-crypto", features = ["linux"] }
 
 [features]
 default = ["linux"]
-linux = []
+linux = ["elastic-crypto/linux"]
 sevsnp = ["elastic-crypto/sevsnp"]
 wasm = ["elastic-crypto/wasm"]
