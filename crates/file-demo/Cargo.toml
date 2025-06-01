@@ -1,0 +1,14 @@
+[package]
+name = "file-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+elastic-file = { path = "../elastic-file" }
+elastic-crypto = { path = "../elastic-crypto" }
+
+[features]
+default = ["linux"]
+linux = []
+sevsnp = ["elastic-file/sevsnp"]
+wasm = ["elastic-file/wasm"] 
