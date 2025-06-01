@@ -106,6 +106,7 @@ impl rand::RngCore for SevsnpRng {
 }
 
 // SEV-SNP specific AES implementation
+#[derive(Clone)]
 pub struct SevsnpAes {
     _key: Vec<u8>,
     #[cfg(not(target_os = "linux"))]
@@ -173,5 +174,9 @@ impl SevsnpAes {
             self.cipher.decrypt(nonce, data)
                 .map_err(|_| Error::DecryptionError)
         }
+    }
+
+    pub fn key(&self) -> &[u8] {
+        &self._key
     }
 } 

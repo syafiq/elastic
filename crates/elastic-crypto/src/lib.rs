@@ -24,6 +24,106 @@ pub trait Crypto {
     fn decrypt(&self, key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error>;
 }
 
+#[derive(Debug)]
+pub enum CryptoBackend {
+    #[cfg(feature = "linux")]
+    Linux {
+        key: Vec<u8>,
+        aes: AesKey,
+    },
+    #[cfg(feature = "sevsnp")]
+    Sevsnp(SevsnpAes),
+    #[cfg(feature = "wasm")]
+    Wasm(WasmCrypto),
+    #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
+    None,
+}
+
+pub struct ElasticCrypto {
+    backend: CryptoBackend,
+}
+
+impl ElasticCrypto {
+    pub fn new() -> Result<Self, Error> {
+        #[cfg(feature = "linux")]
+        {
+            println!("[ElasticCrypto] Using Linux backend");
+            let key = vec![0u8; 32];
+            let aes = AesKey::new(&key)?;
+            Ok(Self {
+                backend: CryptoBackend::Linux { key, aes },
+            })
+        }
+        #[cfg(all(not(feature = "linux"), feature = "sevsnp"))]
+        {
+            println!("[ElasticCrypto] Using SEV-SNP backend");
+            let key = vec![0u8; 32];
+            Ok(Self {
+                backend: CryptoBackend::Sevsnp(SevsnpAes::new(&key)?),
+            })
+        }
+        #[cfg(all(not(feature = "linux"), not(feature = "sevsnp"), feature = "wasm"))]
+        {
+            println!("[ElasticCrypto] Using WASM backend");
+            Ok(Self {
+                backend: CryptoBackend::Wasm(WasmCrypto::new()),
+            })
+        }
+        #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
+        {
+            println!("[ElasticCrypto] No supported backend feature enabled");
+            Err(Error::UnsupportedOperation)
+        }
+    }
+}
+
+impl Crypto for ElasticCrypto {
+    fn generate_key(&self) -> Result<Vec<u8>, Error> {
+        match &self.backend {
+            #[cfg(feature = "linux")]
+            CryptoBackend::Linux { key, .. } => Ok(key.clone()),
+            #[cfg(feature = "sevsnp")]
+            CryptoBackend::Sevsnp(backend) => Ok(backend.key().to_vec()),
+            #[cfg(feature = "wasm")]
+            CryptoBackend::Wasm(backend) => backend.generate_key(),
+            #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
+            CryptoBackend::None => Err(Error::UnsupportedOperation),
+        }
+    }
+
+    fn encrypt(&self, key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error> {
+        match &self.backend {
+            #[cfg(feature = "linux")]
+            CryptoBackend::Linux { aes, .. } => aes.encrypt(data, mode),
+            #[cfg(feature = "sevsnp")]
+            CryptoBackend::Sevsnp(backend) => {
+                let mut backend = backend.clone();
+                backend.encrypt(data)
+            }
+            #[cfg(feature = "wasm")]
+            CryptoBackend::Wasm(backend) => backend.encrypt(key, data, mode),
+            #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
+            CryptoBackend::None => Err(Error::UnsupportedOperation),
+        }
+    }
+
+    fn decrypt(&self, key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error> {
+        match &self.backend {
+            #[cfg(feature = "linux")]
+            CryptoBackend::Linux { aes, .. } => aes.decrypt(data, mode),
+            #[cfg(feature = "sevsnp")]
+            CryptoBackend::Sevsnp(backend) => {
+                let mut backend = backend.clone();
+                backend.decrypt(data)
+            }
+            #[cfg(feature = "wasm")]
+            CryptoBackend::Wasm(backend) => backend.decrypt(key, data, mode),
+            #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
+            CryptoBackend::None => Err(Error::UnsupportedOperation),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

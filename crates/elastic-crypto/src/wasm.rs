@@ -25,6 +25,7 @@ struct WasmCryptoInner {
 }
 
 // WASM-specific implementation that uses SEV-SNP when available
+#[derive(Debug)]
 pub struct WasmCrypto {
     inner: UnsafeCell<WasmCryptoInner>,
 }
