@@ -107,8 +107,6 @@ impl rand::RngCore for SevsnpRng {
 
 // SEV-SNP specific AES implementation
 pub struct SevsnpAes {
-    #[cfg(target_os = "linux")]
-    firmware: Firmware,
     _key: Vec<u8>,
     #[cfg(not(target_os = "linux"))]
     cipher: Aes256Gcm,
@@ -126,9 +124,7 @@ impl SevsnpAes {
     pub fn new(key: &[u8]) -> Result<Self, Error> {
         #[cfg(target_os = "linux")]
         {
-            let firmware = Firmware::open().map_err(|_| Error::SevsnpNotAvailable)?;
             Ok(Self {
-                firmware,
                 _key: key.to_vec(),
             })
         }
