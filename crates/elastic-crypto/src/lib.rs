@@ -91,7 +91,7 @@ impl Crypto for ElasticCrypto {
         }
     }
 
-    fn encrypt(&self, key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error> {
+    fn encrypt(&self, _key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error> {
         match &self.backend {
             #[cfg(feature = "linux")]
             CryptoBackend::Linux { aes, .. } => aes.encrypt(data, mode),
@@ -101,13 +101,13 @@ impl Crypto for ElasticCrypto {
                 backend.encrypt(data)
             }
             #[cfg(feature = "wasm")]
-            CryptoBackend::Wasm(backend) => backend.encrypt(key, data, mode),
+            CryptoBackend::Wasm(backend) => backend.encrypt(_key, data, mode),
             #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
             CryptoBackend::None => Err(Error::UnsupportedOperation),
         }
     }
 
-    fn decrypt(&self, key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error> {
+    fn decrypt(&self, _key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error> {
         match &self.backend {
             #[cfg(feature = "linux")]
             CryptoBackend::Linux { aes, .. } => aes.decrypt(data, mode),
@@ -117,7 +117,7 @@ impl Crypto for ElasticCrypto {
                 backend.decrypt(data)
             }
             #[cfg(feature = "wasm")]
-            CryptoBackend::Wasm(backend) => backend.decrypt(key, data, mode),
+            CryptoBackend::Wasm(backend) => backend.decrypt(_key, data, mode),
             #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
             CryptoBackend::None => Err(Error::UnsupportedOperation),
         }
