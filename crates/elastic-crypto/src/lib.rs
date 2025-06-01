@@ -18,12 +18,15 @@ pub use wasm::*;
 #[cfg(feature = "sevsnp")]
 pub use sev::{SevsnpRng, SevsnpAes};
 
-#[cfg(feature = "linux")]
-println!("[ElasticCrypto] Debug: linux module is compiled");
-#[cfg(feature = "sevsnp")]
-println!("[ElasticCrypto] Debug: sevsnp module is compiled");
-#[cfg(feature = "wasm")]
-println!("[ElasticCrypto] Debug: wasm module is compiled");
+fn debug_features() {
+    println!("[ElasticCrypto] Debug: Checking features...");
+    #[cfg(feature = "linux")]
+    println!("[ElasticCrypto] Debug: linux feature is enabled");
+    #[cfg(feature = "sevsnp")]
+    println!("[ElasticCrypto] Debug: sevsnp feature is enabled");
+    #[cfg(feature = "wasm")]
+    println!("[ElasticCrypto] Debug: wasm feature is enabled");
+}
 
 pub trait Crypto {
     fn generate_key(&self) -> Result<Vec<u8>, Error>;
@@ -52,13 +55,7 @@ pub struct ElasticCrypto {
 
 impl ElasticCrypto {
     pub fn new() -> Result<Self, Error> {
-        println!("[ElasticCrypto] Debug: Checking features...");
-        #[cfg(feature = "linux")]
-        println!("[ElasticCrypto] Debug: linux feature is enabled");
-        #[cfg(feature = "sevsnp")]
-        println!("[ElasticCrypto] Debug: sevsnp feature is enabled");
-        #[cfg(feature = "wasm")]
-        println!("[ElasticCrypto] Debug: wasm feature is enabled");
+        debug_features();
 
         #[cfg(all(feature = "linux", feature = "sevsnp"))]
         {
