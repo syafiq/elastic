@@ -19,13 +19,38 @@ pub use wasm::*;
 pub use sev::{SevsnpRng, SevsnpAes};
 
 fn debug_features() {
-    println!("[ElasticCrypto] Debug: Checking features...");
+    println!("[ElasticCrypto] Debug: Checking feature flags...");
+    
     #[cfg(feature = "linux")]
-    println!("[ElasticCrypto] Debug: linux feature is enabled");
+    println!("[ElasticCrypto] Debug: 'linux' feature is ENABLED");
+    #[cfg(not(feature = "linux"))]
+    println!("[ElasticCrypto] Debug: 'linux' feature is DISABLED");
+    
     #[cfg(feature = "sevsnp")]
-    println!("[ElasticCrypto] Debug: sevsnp feature is enabled");
+    println!("[ElasticCrypto] Debug: 'sevsnp' feature is ENABLED");
+    #[cfg(not(feature = "sevsnp"))]
+    println!("[ElasticCrypto] Debug: 'sevsnp' feature is DISABLED");
+    
     #[cfg(feature = "wasm")]
-    println!("[ElasticCrypto] Debug: wasm feature is enabled");
+    println!("[ElasticCrypto] Debug: 'wasm' feature is ENABLED");
+    #[cfg(not(feature = "wasm"))]
+    println!("[ElasticCrypto] Debug: 'wasm' feature is DISABLED");
+
+    // Check if we're on Linux
+    #[cfg(target_os = "linux")]
+    println!("[ElasticCrypto] Debug: Running on Linux OS");
+    #[cfg(not(target_os = "linux"))]
+    println!("[ElasticCrypto] Debug: Not running on Linux OS");
+
+    // Check if SEV-SNP device exists
+    #[cfg(target_os = "linux")]
+    {
+        if std::path::Path::new("/dev/sev-guest").exists() {
+            println!("[ElasticCrypto] Debug: SEV-SNP device exists");
+        } else {
+            println!("[ElasticCrypto] Debug: SEV-SNP device does not exist");
+        }
+    }
 }
 
 pub trait Crypto {
@@ -56,59 +81,45 @@ pub struct ElasticCrypto {
 impl ElasticCrypto {
     pub fn new() -> Result<Self, Error> {
         debug_features();
-
-        #[cfg(all(feature = "linux", feature = "sevsnp"))]
+        
+        #[cfg(feature = "linux")]
         {
-            println!("[ElasticCrypto] Debug: Both linux and sevsnp features are enabled");
-            // Check if SEV-SNP is available
+            println!("[ElasticCrypto] Debug: Attempting to use Linux backend");
+            return Ok(Self {
+                backend: CryptoBackend::Linux {
+                    key: vec![0u8; 32],
+                    aes: AesKey::new(&vec![0u8; 32])?,
+                },
+            });
+        }
+        
+        #[cfg(feature = "sevsnp")]
+        {
+            println!("[ElasticCrypto] Debug: Attempting to use SEV-SNP backend");
             if std::path::Path::new("/dev/sev-guest").exists() {
-                println!("[ElasticCrypto] Using SEV-SNP backend");
-                let key = vec![0u8; 32];
-                Ok(Self {
-                    backend: CryptoBackend::Sevsnp(SevsnpAes::new(&key)?),
-                })
-            } else {
-                println!("[ElasticCrypto] Using Linux backend");
-                let key = vec![0u8; 32];
-                let aes = AesKey::new(&key)?;
-                Ok(Self {
-                    backend: CryptoBackend::Linux { key, aes },
-                })
+                return Ok(Self {
+                    backend: CryptoBackend::Sevsnp(SevsnpAes::new(&vec![0u8; 32])?),
+                });
             }
+            println!("[ElasticCrypto] Debug: SEV-SNP device not found, falling back to Linux backend");
+            return Ok(Self {
+                backend: CryptoBackend::Linux {
+                    key: vec![0u8; 32],
+                    aes: AesKey::new(&vec![0u8; 32])?,
+                },
+            });
         }
-        #[cfg(all(feature = "linux", not(feature = "sevsnp")))]
+        
+        #[cfg(feature = "wasm")]
         {
-            println!("[ElasticCrypto] Debug: Only linux feature is enabled");
-            println!("[ElasticCrypto] Using Linux backend");
-            let key = vec![0u8; 32];
-            let aes = AesKey::new(&key)?;
-            Ok(Self {
-                backend: CryptoBackend::Linux { key, aes },
-            })
-        }
-        #[cfg(all(not(feature = "linux"), feature = "sevsnp"))]
-        {
-            println!("[ElasticCrypto] Debug: Only sevsnp feature is enabled");
-            println!("[ElasticCrypto] Using SEV-SNP backend");
-            let key = vec![0u8; 32];
-            Ok(Self {
-                backend: CryptoBackend::Sevsnp(SevsnpAes::new(&key)?),
-            })
-        }
-        #[cfg(all(not(feature = "linux"), not(feature = "sevsnp"), feature = "wasm"))]
-        {
-            println!("[ElasticCrypto] Debug: Only wasm feature is enabled");
-            println!("[ElasticCrypto] Using WASM backend");
-            Ok(Self {
+            println!("[ElasticCrypto] Debug: Attempting to use WASM backend");
+            return Ok(Self {
                 backend: CryptoBackend::Wasm(WasmCrypto::new()),
-            })
+            });
         }
-        #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
-        {
-            println!("[ElasticCrypto] Debug: No features are enabled");
-            println!("[ElasticCrypto] No supported backend feature enabled");
-            Err(Error::UnsupportedOperation)
-        }
+        
+        println!("[ElasticCrypto] Debug: No supported backend feature enabled");
+        Err(Error::UnsupportedOperation)
     }
 }
 
