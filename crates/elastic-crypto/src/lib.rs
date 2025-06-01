@@ -82,6 +82,19 @@ impl ElasticCrypto {
     pub fn new() -> Result<Self, Error> {
         debug_features();
         
+        // Try SEV-SNP first if enabled
+        #[cfg(feature = "sevsnp")]
+        {
+            println!("[ElasticCrypto] Debug: Attempting to use SEV-SNP backend");
+            if std::path::Path::new("/dev/sev-guest").exists() {
+                return Ok(Self {
+                    backend: CryptoBackend::Sevsnp(SevsnpAes::new(&vec![0u8; 32])?),
+                });
+            }
+            println!("[ElasticCrypto] Debug: SEV-SNP device not found, falling back to Linux backend");
+        }
+        
+        // Try Linux backend if enabled
         #[cfg(feature = "linux")]
         {
             println!("[ElasticCrypto] Debug: Attempting to use Linux backend");
@@ -93,23 +106,7 @@ impl ElasticCrypto {
             });
         }
         
-        #[cfg(feature = "sevsnp")]
-        {
-            println!("[ElasticCrypto] Debug: Attempting to use SEV-SNP backend");
-            if std::path::Path::new("/dev/sev-guest").exists() {
-                return Ok(Self {
-                    backend: CryptoBackend::Sevsnp(SevsnpAes::new(&vec![0u8; 32])?),
-                });
-            }
-            println!("[ElasticCrypto] Debug: SEV-SNP device not found, falling back to Linux backend");
-            return Ok(Self {
-                backend: CryptoBackend::Linux {
-                    key: vec![0u8; 32],
-                    aes: AesKey::new(&vec![0u8; 32])?,
-                },
-            });
-        }
-        
+        // Try WASM backend if enabled
         #[cfg(feature = "wasm")]
         {
             println!("[ElasticCrypto] Debug: Attempting to use WASM backend");
@@ -118,8 +115,12 @@ impl ElasticCrypto {
             });
         }
         
-        println!("[ElasticCrypto] Debug: No supported backend feature enabled");
-        Err(Error::UnsupportedOperation)
+        // If no features are enabled, return error
+        #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
+        {
+            println!("[ElasticCrypto] Debug: No supported backend feature enabled");
+            return Err(Error::UnsupportedOperation);
+        }
     }
 }
 
