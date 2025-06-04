@@ -27,7 +27,7 @@ fn main() {
     assert_eq!(test_data, decrypted.as_slice(), "Decrypted data doesn't match original");
     
     // Print results in a consistent format
-    let platform = if crypto.is_sevsnp { "SEV-SNP" } else { "Linux" };
+    let platform = if crypto.is_sevsnp() { "SEV-SNP" } else { "Linux" };
     println!("Platform: {}", platform);
     println!("Test data: {}", String::from_utf8_lossy(test_data));
     println!("Encrypted (base64): {}", base64::engine::general_purpose::STANDARD.encode(&encrypted));

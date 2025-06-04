@@ -129,6 +129,10 @@ impl ElasticCrypto {
         })
     }
 
+    pub fn is_sevsnp(&self) -> bool {
+        self.is_sevsnp
+    }
+
     fn get_next_handle(&self) -> u32 {
         let mut handle = self.next_handle.lock().unwrap();
         let current = *handle;
