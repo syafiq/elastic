@@ -171,7 +171,9 @@ impl ElasticCrypto {
                 let cipher = aes_gcm::Aes256Gcm::new_from_slice(&key.data)
                     .map_err(|e| Error::EncryptionError(e.to_string()))?;
                 
-                let nonce = aes_gcm::Nonce::from_slice(&[0u8; 12]); // TODO: Use proper nonce
+                // Use a fixed nonce for consistent results across platforms
+                // In production, you would use a random nonce
+                let nonce = aes_gcm::Nonce::from_slice(b"elastic-nc12"); // 12 bytes
                 cipher.encrypt(nonce, data.as_ref())
                     .map_err(|e| Error::EncryptionError(e.to_string()))
             }
@@ -189,7 +191,8 @@ impl ElasticCrypto {
                 let cipher = aes_gcm::Aes256Gcm::new_from_slice(&key.data)
                     .map_err(|e| Error::DecryptionError(e.to_string()))?;
                 
-                let nonce = aes_gcm::Nonce::from_slice(&[0u8; 12]); // TODO: Use proper nonce
+                // Use the same fixed nonce as encryption
+                let nonce = aes_gcm::Nonce::from_slice(b"elastic-nc12"); // 12 bytes
                 cipher.decrypt(nonce, data.as_ref())
                     .map_err(|e| Error::DecryptionError(e.to_string()))
             }

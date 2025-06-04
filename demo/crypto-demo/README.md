@@ -1,54 +1,88 @@
 # Elastic Crypto Demo
 
-This demo showcases the cross-platform capabilities of the Elastic Crypto interface. It demonstrates how to:
-1. Build once on your local machine
-2. Run the same binary on different platforms (Linux and SEV-SNP)
-3. Get consistent results across platforms
+This demo demonstrates the "build once, run anywhere" principle of the Elastic Crypto HAL. The same WASM binary can run on different platforms (Linux and SEV-SNP) using different hardware backends while maintaining consistent behavior.
 
 ## WIT Interface
 
-The demo uses the WIT interface defined in `crates/elastic-crypto/wit/crypto.wit`. This interface ensures consistent behavior across different platforms.
+The demo uses this WIT interface (`crates/elastic-crypto/wit/crypto.wit`):
 
-## Building
+```wit
+interface crypto {
+  // Key management
+  generate-key: func(config: key-config) -> result<u32, error>;
+  import-key: func(key-data: list<u8>, config: key-config) -> result<u32, error>;
+  export-key: func(handle: u32) -> result<list<u8>, error>;
+  delete-key: func(handle: u32) -> result<unit, error>;
+
+  // Crypto operations
+  encrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, error>;
+  decrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, error>;
+  hash: func(data: list<u8>) -> result<list<u8>, error>;
+}
+
+record key-config {
+  key-type: key-type;
+  key-size: u32;
+  secure-storage: bool;
+}
+
+enum key-type {
+  symmetric,
+  asymmetric,
+  hmac,
+}
+
+enum error {
+  invalid-key-length,
+  encryption-error,
+  decryption-error,
+  unsupported-operation,
+  key-not-found,
+  operation-not-permitted,
+}
+```
+
+## Cross-Platform Workflow
+
+### 1. Build on Local Machine
 
 ```bash
-# Build for WASI
+# Build the WASM binary
 cargo build --target wasm32-wasip1
 ```
 
-## Running
+The resulting binary will be at `target/wasm32-wasip1/debug/crypto-demo.wasm`
 
-### On Linux
+### 2. Run on Different Platforms
+
+#### On Linux:
 ```bash
 wasmtime ../../target/wasm32-wasip1/debug/crypto-demo.wasm
 ```
 
-### On AWS SEV-SNP
+#### On AWS SEV-SNP:
 ```bash
-# Set the environment variable to enable SEV-SNP mode
+# Enable SEV-SNP mode
 export ELASTIC_SEV_SNP=1
-# IMPORTANT: Mount /dev so the WASM module can access /dev/sev-guest
+# Mount /dev for SEV-SNP device access
 wasmtime --dir /dev ../../target/wasm32-wasip1/debug/crypto-demo.wasm
 ```
-
-> **Note:**
-> The `--dir /dev` flag is required for the WASM module to access `/dev/sev-guest` inside the sandbox. Without this, SEV-SNP hardware will not be detected by the demo, even if it exists on the host.
 
 ## What to Expect
 
 The demo will:
-1. Show which mode it's running in (Linux or SEV-SNP)
-2. Generate an AES-256 key
-3. Encrypt and decrypt a sample message
-4. Calculate a SHA-256 hash
-5. Clean up by deleting the key
+1. Generate an AES-256 key
+2. Encrypt and decrypt a test message
+3. Verify the decrypted data matches the original
+4. Print the results in a consistent format
 
-The same WASM binary will use different hardware backends depending on the environment:
+The same binary will use different hardware backends:
 - On Linux: Uses the Linux crypto backend
 - On SEV-SNP: Uses the SEV-SNP hardware crypto backend
 
-## Notes
+## Key Points
 
-- The demo uses AES-GCM for encryption/decryption
-- Keys are not stored in secure storage for demonstration purposes
-- The same binary produces the same results on both platforms 
+- The same WASM binary works on both platforms
+- The WIT interface ensures consistent behavior
+- Encryption results are consistent across platforms
+- No platform-specific code in the demo 
