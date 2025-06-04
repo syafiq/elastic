@@ -69,8 +69,8 @@ wasmtime ../../target/wasm32-wasip1/debug/crypto-demo.wasm
 #### On AWS SEV-SNP:
 ```bash
 # On the SEV-SNP machine
-export ELASTIC_SEV_SNP=1
-wasmtime --dir /dev ~/demo/crypto-demo.wasm
+# Note: Environment variables must be passed explicitly to wasmtime
+wasmtime --env ELASTIC_SEV_SNP=1 --dir /dev ~/demo/crypto-demo.wasm
 ```
 
 ## Platform-Specific Implementations
