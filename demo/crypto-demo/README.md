@@ -130,34 +130,10 @@ enum error {
 ```
 
 This interface is implemented differently on each platform:
+- Linux: Uses the Linux crypto backend (e.g., /dev/crypto)
+- SEV-SNP: Uses the SEV-SNP hardware crypto backend
 
-### Linux Implementation
-```rust
-// crates/elastic-crypto/src/linux.rs
-impl Crypto for LinuxCrypto {
-    fn encrypt(&self, handle: u32, data: Vec<u8>) -> Result<Vec<u8>> {
-        // Uses Linux crypto backend (e.g., /dev/crypto)
-        let cipher = aes_gcm::Aes256Gcm::new_from_slice(&key.data)?;
-        let nonce = aes_gcm::Nonce::from_slice(b"elastic-nc12");
-        cipher.encrypt(nonce, data.as_ref())
-    }
-}
-```
-
-### SEV-SNP Implementation
-```rust
-// crates/elastic-crypto/src/sev/mod.rs
-impl Crypto for SevsnpCrypto {
-    fn encrypt(&self, handle: u32, data: Vec<u8>) -> Result<Vec<u8>> {
-        // Uses SEV-SNP hardware crypto
-        if let Some(aes) = self.aes.as_mut() {
-            aes.encrypt(data)
-        } else {
-            Err(Error::SevsnpNotAvailable)
-        }
-    }
-}
-```
+The key point is that the same WIT interface allows the demo code to work identically on both platforms, while the actual implementation uses different hardware backends.
 
 ## Platform-Specific Implementations
 
