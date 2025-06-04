@@ -42,30 +42,67 @@ enum error {
 }
 ```
 
-## Cross-Platform Workflow
+## Complete Cross-Platform Workflow
 
 ### 1. Build on Local Machine
-
 ```bash
-# Build the WASM binary
+# On your local machine
 cargo build --target wasm32-wasip1
 ```
 
 The resulting binary will be at `target/wasm32-wasip1/debug/crypto-demo.wasm`
 
-### 2. Run on Different Platforms
+### 2. Copy Binary to SEV-SNP
+```bash
+# Copy the binary to your SEV-SNP machine
+scp target/wasm32-wasip1/debug/crypto-demo.wasm user@sev-snp-machine:~/demo/
+```
+
+### 3. Run on Different Platforms
 
 #### On Linux:
 ```bash
+# On your local machine
 wasmtime ../../target/wasm32-wasip1/debug/crypto-demo.wasm
 ```
 
 #### On AWS SEV-SNP:
 ```bash
-# Enable SEV-SNP mode
+# On the SEV-SNP machine
 export ELASTIC_SEV_SNP=1
-# Mount /dev for SEV-SNP device access
-wasmtime --dir /dev ../../target/wasm32-wasip1/debug/crypto-demo.wasm
+wasmtime --dir /dev ~/demo/crypto-demo.wasm
+```
+
+## Platform-Specific Implementations
+
+The same WIT interface is implemented differently on each platform:
+
+### Linux Implementation
+```rust
+// crates/elastic-crypto/src/linux.rs
+impl Crypto for LinuxCrypto {
+    fn encrypt(&self, handle: u32, data: Vec<u8>) -> Result<Vec<u8>> {
+        // Uses Linux crypto backend (e.g., /dev/crypto)
+        let cipher = aes_gcm::Aes256Gcm::new_from_slice(&key.data)?;
+        let nonce = aes_gcm::Nonce::from_slice(b"elastic-nc12");
+        cipher.encrypt(nonce, data.as_ref())
+    }
+}
+```
+
+### SEV-SNP Implementation
+```rust
+// crates/elastic-crypto/src/sev/mod.rs
+impl Crypto for SevsnpCrypto {
+    fn encrypt(&self, handle: u32, data: Vec<u8>) -> Result<Vec<u8>> {
+        // Uses SEV-SNP hardware crypto
+        if let Some(aes) = self.aes.as_mut() {
+            aes.encrypt(data)
+        } else {
+            Err(Error::SevsnpNotAvailable)
+        }
+    }
+}
 ```
 
 ## What to Expect
@@ -82,7 +119,8 @@ The same binary will use different hardware backends:
 
 ## Key Points
 
-- The same WASM binary works on both platforms
-- The WIT interface ensures consistent behavior
+- The same WASM binary works on both platforms without recompilation
+- The WIT interface ensures consistent behavior across platforms
 - Encryption results are consistent across platforms
-- No platform-specific code in the demo 
+- No platform-specific code in the demo
+- Different hardware backends are used transparently 
