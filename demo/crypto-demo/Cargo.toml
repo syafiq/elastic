@@ -1,0 +1,10 @@
+[package]
+name = "crypto-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+elastic-crypto = { path = "../../crates/elastic-crypto", features = ["wasm", "sevsnp"] }
+anyhow = "1.0"
+base64 = "0.21"
+hex = "0.4" 
