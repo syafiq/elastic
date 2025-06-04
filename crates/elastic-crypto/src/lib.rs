@@ -188,21 +188,9 @@ impl ElasticCrypto {
                 // In production, you would use a random nonce
                 let nonce = aes_gcm::Nonce::from_slice(b"elastic-nc12"); // 12 bytes
                 
-                // Use the same encryption method on both platforms
-                if env::var("ELASTIC_SEV_SNP").unwrap_or_default() == "1" {
-                    // On SEV-SNP, use hardware acceleration if available
-                    if let Some(aes) = self.aes.lock().unwrap().as_mut() {
-                        aes.encrypt(&data)
-                    } else {
-                        // Fallback to software implementation if hardware not available
-                        cipher.encrypt(nonce, data.as_ref())
-                            .map_err(|e| Error::EncryptionError(e.to_string()))
-                    }
-                } else {
-                    // On Linux, use software implementation
-                    cipher.encrypt(nonce, data.as_ref())
-                        .map_err(|e| Error::EncryptionError(e.to_string()))
-                }
+                // Always use software implementation for consistent results
+                cipher.encrypt(nonce, data.as_ref())
+                    .map_err(|e| Error::EncryptionError(e.to_string()))
             }
             _ => Err(Error::UnsupportedOperation),
         }
