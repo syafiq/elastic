@@ -98,21 +98,20 @@ impl ElasticCrypto {
         println!("Checking for SEV-SNP support...");
         
         let mut aes = None;
-        let is_sevsnp = std::path::Path::new("/dev/sev-guest").exists() && 
-                       env::var("ELASTIC_SEV_SNP").unwrap_or_default() == "1";
+        let is_sevsnp = env::var("ELASTIC_SEV_SNP").unwrap_or_default() == "1";
         
         #[cfg(feature = "sevsnp")]
         {
             println!("SEV-SNP feature is enabled in build");
             if is_sevsnp {
-                println!("SEV-SNP device found at /dev/sev-guest");
+                println!("SEV-SNP mode enabled via environment variable");
                 // Initialize SEV-SNP AES hardware with a fixed key for demo
                 let demo_key = [0x42u8; 32]; // Fixed key for demo
                 if let Ok(sev_aes) = SevsnpAes::new(&demo_key) {
                     aes = Some(sev_aes);
                 }
             } else {
-                println!("No SEV-SNP device found at /dev/sev-guest");
+                println!("SEV-SNP mode not enabled");
             }
         }
         
