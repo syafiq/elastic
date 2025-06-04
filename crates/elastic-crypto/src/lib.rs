@@ -96,11 +96,17 @@ impl ElasticCrypto {
         println!("Initializing ElasticCrypto...");
         println!("Checking for SEV-SNP support...");
         
+        let mut aes = None;
+        
         #[cfg(feature = "sevsnp")]
         {
             println!("SEV-SNP feature is enabled in build");
             if std::path::Path::new("/dev/sev-guest").exists() {
                 println!("SEV-SNP device found at /dev/sev-guest");
+                // Initialize SEV-SNP AES hardware
+                if let Ok(sev_aes) = SevsnpAes::new(&[0u8; 32]) {
+                    aes = Some(sev_aes);
+                }
             } else {
                 println!("No SEV-SNP device found at /dev/sev-guest");
             }
@@ -114,7 +120,7 @@ impl ElasticCrypto {
         Ok(Self {
             keys: Mutex::new(HashMap::new()),
             next_handle: Mutex::new(1),
-            aes: Mutex::new(None),
+            aes: Mutex::new(aes),
         })
     }
 
