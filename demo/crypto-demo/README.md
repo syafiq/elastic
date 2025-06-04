@@ -40,11 +40,54 @@ fn main() {
 }
 ```
 
-This code:
-1. Uses the common WIT interface
-2. Works on both Linux and SEV-SNP without changes
-3. Gets different hardware backends automatically
-4. Produces consistent results across platforms
+## Build and Run Workflow
+
+### 1. Build on Local Machine
+```bash
+# On your local machine
+cd demo/crypto-demo
+cargo build --target wasm32-wasip1
+
+# The resulting binary will be at:
+# target/wasm32-wasip1/debug/crypto-demo.wasm
+```
+
+This builds a single WASM binary that can run on both platforms. The binary:
+- Uses the common WIT interface
+- Contains no platform-specific code
+- Will use different hardware backends automatically
+
+### 2. Run on Different Platforms
+
+#### On Linux:
+```bash
+# On your local machine
+wasmtime target/wasm32-wasip1/debug/crypto-demo.wasm
+
+# Output:
+# Test data: Hello, Elastic Crypto!
+# Encrypted (base64): PwckOK+VtrHwZILLbFwchsiUui8/islc2l503yzNJqkZkaWxMOg=
+# Decrypted: Hello, Elastic Crypto!
+```
+
+#### On AWS SEV-SNP:
+```bash
+# Copy the binary to SEV-SNP
+scp target/wasm32-wasip1/debug/crypto-demo.wasm user@sev-snp-machine:~/demo/
+
+# Run on SEV-SNP
+cd ~/demo
+wasmtime --env ELASTIC_SEV_SNP=1 --dir /dev crypto-demo.wasm
+
+# Output:
+# Test data: Hello, Elastic Crypto!
+# Encrypted (base64): PwckOK+VtrHwZILLbFwchsiUui8/islc2l503yzNJqkZkaWxMOg=
+# Decrypted: Hello, Elastic Crypto!
+```
+
+The same binary produces identical results on both platforms, but uses different hardware:
+- On Linux: Uses the Linux crypto backend
+- On SEV-SNP: Uses the SEV-SNP hardware crypto backend
 
 ## WIT Interface
 
@@ -114,37 +157,6 @@ impl Crypto for SevsnpCrypto {
         }
     }
 }
-```
-
-## Complete Cross-Platform Workflow
-
-### 1. Build on Local Machine
-```bash
-# On your local machine
-cargo build --target wasm32-wasip1
-```
-
-The resulting binary will be at `target/wasm32-wasip1/debug/crypto-demo.wasm`
-
-### 2. Copy Binary to SEV-SNP
-```bash
-# Copy the binary to your SEV-SNP machine
-scp target/wasm32-wasip1/debug/crypto-demo.wasm user@sev-snp-machine:~/demo/
-```
-
-### 3. Run on Different Platforms
-
-#### On Linux:
-```bash
-# On your local machine
-wasmtime ../../target/wasm32-wasip1/debug/crypto-demo.wasm
-```
-
-#### On AWS SEV-SNP:
-```bash
-# On the SEV-SNP machine
-# Note: Environment variables must be passed explicitly to wasmtime
-wasmtime --env ELASTIC_SEV_SNP=1 --dir /dev ~/demo/crypto-demo.wasm
 ```
 
 ## Platform-Specific Implementations
