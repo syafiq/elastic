@@ -22,6 +22,7 @@ use std::sync::Mutex;
 use thiserror::Error;
 use aes_gcm::aead::Aead;
 use aes_gcm::KeyInit;
+use std::env;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -87,6 +88,7 @@ pub struct Key {
 pub struct ElasticCrypto {
     keys: Mutex<HashMap<u32, Key>>,
     next_handle: Mutex<u32>,
+    aes: Mutex<Option<SevsnpAes>>,
 }
 
 impl ElasticCrypto {
@@ -112,6 +114,7 @@ impl ElasticCrypto {
         Ok(Self {
             keys: Mutex::new(HashMap::new()),
             next_handle: Mutex::new(1),
+            aes: Mutex::new(None),
         })
     }
 
@@ -174,8 +177,22 @@ impl ElasticCrypto {
                 // Use a fixed nonce for consistent results across platforms
                 // In production, you would use a random nonce
                 let nonce = aes_gcm::Nonce::from_slice(b"elastic-nc12"); // 12 bytes
-                cipher.encrypt(nonce, data.as_ref())
-                    .map_err(|e| Error::EncryptionError(e.to_string()))
+                
+                // Use the same encryption method on both platforms
+                if env::var("ELASTIC_SEV_SNP").unwrap_or_default() == "1" {
+                    // On SEV-SNP, use hardware acceleration if available
+                    if let Some(aes) = self.aes.lock().unwrap().as_mut() {
+                        aes.encrypt(&data)
+                    } else {
+                        // Fallback to software implementation if hardware not available
+                        cipher.encrypt(nonce, data.as_ref())
+                            .map_err(|e| Error::EncryptionError(e.to_string()))
+                    }
+                } else {
+                    // On Linux, use software implementation
+                    cipher.encrypt(nonce, data.as_ref())
+                        .map_err(|e| Error::EncryptionError(e.to_string()))
+                }
             }
             _ => Err(Error::UnsupportedOperation),
         }

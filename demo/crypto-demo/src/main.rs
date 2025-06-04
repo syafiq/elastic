@@ -27,7 +27,12 @@ fn main() {
     assert_eq!(test_data, decrypted.as_slice(), "Decrypted data doesn't match original");
     
     // Print results in a consistent format
-    println!("Platform: {}", if env::var("ELASTIC_SEV_SNP").unwrap_or_default() == "1" { "SEV-SNP" } else { "Linux" });
+    let platform = if env::var("ELASTIC_SEV_SNP").unwrap_or_default() == "1" {
+        "SEV-SNP"
+    } else {
+        "Linux"
+    };
+    println!("Platform: {}", platform);
     println!("Test data: {}", String::from_utf8_lossy(test_data));
     println!("Encrypted (base64): {}", base64::engine::general_purpose::STANDARD.encode(&encrypted));
     println!("Decrypted: {}", String::from_utf8_lossy(&decrypted));
