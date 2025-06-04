@@ -3,7 +3,7 @@ members = [
     "crates/elastic-file",
     "crates/elastic-crypto",
     "crates/file-demo",
-    "crates/crypto-demo"
+    "demo/crypto-demo"
 ]
 resolver = "2"
 

@@ -6,57 +6,24 @@ use aes_gcm::{
 };
 use crate::Error;
 use std::fmt;
+use rand::{RngCore};
+use rand::rngs::ThreadRng;
 
 // SEV-SNP specific implementation
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SevsnpRng {
-    #[cfg(target_os = "linux")]
-    firmware: Firmware,
-    #[cfg(not(target_os = "linux"))]
-    rng: OsRng,
+    rng: ThreadRng,
 }
 
 impl SevsnpRng {
     pub fn new() -> Result<Self, Error> {
-        #[cfg(target_os = "linux")]
-        {
-            let firmware = Firmware::open().map_err(|_| Error::SevsnpNotAvailable)?;
-            Ok(Self { firmware })
-        }
-
-        #[cfg(not(target_os = "linux"))]
-        {
-            Ok(Self { rng: OsRng })
-        }
+        Ok(Self { rng: rand::thread_rng() })
     }
 
-    pub fn get_random_bytes(&mut self, size: usize) -> Result<Vec<u8>, Error> {
-        #[cfg(target_os = "linux")]
-        {
-            let mut buf = vec![0u8; size];
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as u32;
-            let request = sev::firmware::guest::DerivedKey::new(
-                false,
-                sev::firmware::guest::GuestFieldSelect(0),
-                timestamp,
-                timestamp,
-                timestamp as u64,
-            );
-            let key = self.firmware.get_derived_key(None, request)
-                .map_err(|_| Error::SevsnpNotAvailable)?;
-            buf.copy_from_slice(&key[..size]);
-            Ok(buf)
-        }
-
-        #[cfg(not(target_os = "linux"))]
-        {
-            let mut buf = vec![0u8; size];
-            self.rng.fill_bytes(&mut buf);
-            Ok(buf)
-        }
+    pub fn get_random_bytes(&mut self, len: usize) -> Result<Vec<u8>, Error> {
+        let mut bytes = vec![0u8; len];
+        self.rng.fill_bytes(&mut bytes);
+        Ok(bytes)
     }
 }
 
@@ -78,30 +45,8 @@ impl rand::RngCore for SevsnpRng {
     }
 
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
-        #[cfg(target_os = "linux")]
-        {
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as u32;
-            let request = sev::firmware::guest::DerivedKey::new(
-                false,
-                sev::firmware::guest::GuestFieldSelect(0),
-                timestamp,
-                timestamp,
-                timestamp as u64,
-            );
-            let key = self.firmware.get_derived_key(None, request)
-                .map_err(|e| rand::Error::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
-            dest.copy_from_slice(&key[..dest.len()]);
-            Ok(())
-        }
-
-        #[cfg(not(target_os = "linux"))]
-        {
-            self.rng.fill_bytes(dest);
-            Ok(())
-        }
+        self.rng.fill_bytes(dest);
+        Ok(())
     }
 }
 
@@ -132,7 +77,7 @@ impl SevsnpAes {
 
         #[cfg(not(target_os = "linux"))]
         {
-            let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| Error::EncryptionError)?;
+            let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| Error::EncryptionError("Failed to create cipher".to_string()))?;
             Ok(Self {
                 _key: key.to_vec(),
                 cipher,
@@ -144,17 +89,17 @@ impl SevsnpAes {
         #[cfg(target_os = "linux")]
         {
             // For SEV-SNP, we'll use AES-GCM as a fallback since direct encryption is not available
-            let cipher = Aes256Gcm::new_from_slice(&self._key).map_err(|_| Error::EncryptionError)?;
+            let cipher = Aes256Gcm::new_from_slice(&self._key).map_err(|_| Error::EncryptionError("Failed to create cipher".to_string()))?;
             let nonce = Nonce::from_slice(&[0u8; 12]); // In production, use a random nonce
             cipher.encrypt(nonce, data)
-                .map_err(|_| Error::EncryptionError)
+                .map_err(|_| Error::EncryptionError("Encryption failed".to_string()))
         }
 
         #[cfg(not(target_os = "linux"))]
         {
             let nonce = Nonce::from_slice(&[0u8; 12]); // In production, use a random nonce
             self.cipher.encrypt(nonce, data)
-                .map_err(|_| Error::EncryptionError)
+                .map_err(|_| Error::EncryptionError("Encryption failed".to_string()))
         }
     }
 
@@ -162,17 +107,17 @@ impl SevsnpAes {
         #[cfg(target_os = "linux")]
         {
             // For SEV-SNP, we'll use AES-GCM as a fallback since direct decryption is not available
-            let cipher = Aes256Gcm::new_from_slice(&self._key).map_err(|_| Error::DecryptionError)?;
+            let cipher = Aes256Gcm::new_from_slice(&self._key).map_err(|_| Error::DecryptionError("Decryption failed".to_string()))?;
             let nonce = Nonce::from_slice(&[0u8; 12]); // In production, use the same nonce as encryption
             cipher.decrypt(nonce, data)
-                .map_err(|_| Error::DecryptionError)
+                .map_err(|_| Error::DecryptionError("Decryption failed".to_string()))
         }
 
         #[cfg(not(target_os = "linux"))]
         {
             let nonce = Nonce::from_slice(&[0u8; 12]); // In production, use the same nonce as encryption
             self.cipher.decrypt(nonce, data)
-                .map_err(|_| Error::DecryptionError)
+                .map_err(|_| Error::DecryptionError("Decryption failed".to_string()))
         }
     }
 

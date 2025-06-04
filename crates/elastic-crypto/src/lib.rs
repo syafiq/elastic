@@ -8,8 +8,7 @@ mod sev;
 mod error;
 pub mod aes;
 
-pub use error::Error;
-pub use aes::{AesKey, AesMode};
+pub use aes::AesKey;
 
 #[cfg(feature = "linux")]
 pub use linux::*;
@@ -17,6 +16,201 @@ pub use linux::*;
 pub use wasm::*;
 #[cfg(feature = "sevsnp")]
 pub use sev::{SevsnpRng, SevsnpAes};
+
+use std::collections::HashMap;
+use std::sync::Mutex;
+use thiserror::Error;
+use aes_gcm::aead::Aead;
+use aes_gcm::KeyInit;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Invalid key length")]
+    InvalidKeyLength,
+    #[error("Encryption error: {0}")]
+    EncryptionError(String),
+    #[error("Decryption error: {0}")]
+    DecryptionError(String),
+    #[error("Unsupported operation")]
+    UnsupportedOperation,
+    #[error("Key not found")]
+    KeyNotFound,
+    #[error("Operation not permitted")]
+    OperationNotPermitted,
+    #[error("SEV-SNP not available")]
+    SevSnpNotAvailable,
+    #[error("SEV-SNP operation failed: {0}")]
+    SevSnpOperationFailed(String),
+    #[error("SEV-SNP RNG error: {0}")]
+    SevSnpRngError(String),
+    #[error("SEV-SNP AES error: {0}")]
+    SevSnpAesError(String),
+    #[error("Unsupported mode")]
+    UnsupportedMode,
+    #[error("Not implemented")]
+    NotImplemented,
+    #[error("Encryption failed")]
+    EncryptionFailed,
+    #[error("Decryption failed")]
+    DecryptionFailed,
+    #[error("Invalid ciphertext")]
+    InvalidCiphertext,
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
+
+#[derive(Debug, Clone, Copy)]
+pub enum KeyType {
+    Symmetric,
+    Asymmetric,
+    Hmac,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum AesMode {
+    Cbc,
+    Gcm,
+}
+
+#[derive(Debug, Clone)]
+pub struct KeyConfig {
+    pub key_type: KeyType,
+    pub key_size: u32,
+    pub secure_storage: bool,
+}
+
+pub struct Key {
+    data: Vec<u8>,
+    config: KeyConfig,
+}
+
+pub struct ElasticCrypto {
+    keys: Mutex<HashMap<u32, Key>>,
+    next_handle: Mutex<u32>,
+}
+
+impl ElasticCrypto {
+    pub fn new() -> Result<Self> {
+        println!("Initializing ElasticCrypto...");
+        println!("Checking for SEV-SNP support...");
+        
+        #[cfg(feature = "sevsnp")]
+        {
+            println!("SEV-SNP feature is enabled in build");
+            if std::path::Path::new("/dev/sev-guest").exists() {
+                println!("SEV-SNP device found at /dev/sev-guest");
+            } else {
+                println!("No SEV-SNP device found at /dev/sev-guest");
+            }
+        }
+        
+        #[cfg(not(feature = "sevsnp"))]
+        {
+            println!("SEV-SNP feature is not enabled in build");
+        }
+        
+        Ok(Self {
+            keys: Mutex::new(HashMap::new()),
+            next_handle: Mutex::new(1),
+        })
+    }
+
+    fn get_next_handle(&self) -> u32 {
+        let mut handle = self.next_handle.lock().unwrap();
+        let current = *handle;
+        *handle += 1;
+        current
+    }
+
+    pub fn generate_key(&self, config: KeyConfig) -> Result<u32> {
+        let key_data = match config.key_type {
+            KeyType::Symmetric => {
+                // Generate AES key
+                let mut key = vec![0u8; (config.key_size / 8) as usize];
+                // TODO: Use proper RNG
+                for b in &mut key {
+                    *b = rand::random();
+                }
+                key
+            }
+            _ => return Err(Error::NotImplemented),
+        };
+
+        let handle = self.get_next_handle();
+        self.keys.lock().unwrap().insert(handle, Key { data: key_data, config });
+        Ok(handle)
+    }
+
+    pub fn import_key(&self, key_data: Vec<u8>, config: KeyConfig) -> Result<u32> {
+        let handle = self.get_next_handle();
+        self.keys.lock().unwrap().insert(handle, Key { data: key_data, config });
+        Ok(handle)
+    }
+
+    pub fn export_key(&self, handle: u32) -> Result<Vec<u8>> {
+        let keys = self.keys.lock().unwrap();
+        let key = keys.get(&handle).ok_or(Error::KeyNotFound)?;
+        if key.config.secure_storage {
+            return Err(Error::OperationNotPermitted);
+        }
+        Ok(key.data.clone())
+    }
+
+    pub fn delete_key(&self, handle: u32) -> Result<()> {
+        self.keys.lock().unwrap().remove(&handle).ok_or(Error::KeyNotFound)?;
+        Ok(())
+    }
+
+    pub fn encrypt(&self, handle: u32, data: Vec<u8>) -> Result<Vec<u8>> {
+        let keys = self.keys.lock().unwrap();
+        let key = keys.get(&handle).ok_or(Error::KeyNotFound)?;
+        
+        match key.config.key_type {
+            KeyType::Symmetric => {
+                // Use AES-GCM for symmetric encryption
+                let cipher = aes_gcm::Aes256Gcm::new_from_slice(&key.data)
+                    .map_err(|e| Error::EncryptionError(e.to_string()))?;
+                
+                let nonce = aes_gcm::Nonce::from_slice(&[0u8; 12]); // TODO: Use proper nonce
+                cipher.encrypt(nonce, data.as_ref())
+                    .map_err(|e| Error::EncryptionError(e.to_string()))
+            }
+            _ => Err(Error::UnsupportedOperation),
+        }
+    }
+
+    pub fn decrypt(&self, handle: u32, data: Vec<u8>) -> Result<Vec<u8>> {
+        let keys = self.keys.lock().unwrap();
+        let key = keys.get(&handle).ok_or(Error::KeyNotFound)?;
+        
+        match key.config.key_type {
+            KeyType::Symmetric => {
+                // Use AES-GCM for symmetric decryption
+                let cipher = aes_gcm::Aes256Gcm::new_from_slice(&key.data)
+                    .map_err(|e| Error::DecryptionError(e.to_string()))?;
+                
+                let nonce = aes_gcm::Nonce::from_slice(&[0u8; 12]); // TODO: Use proper nonce
+                cipher.decrypt(nonce, data.as_ref())
+                    .map_err(|e| Error::DecryptionError(e.to_string()))
+            }
+            _ => Err(Error::UnsupportedOperation),
+        }
+    }
+
+    pub fn hash(&self, data: Vec<u8>) -> Result<Vec<u8>> {
+        use sha2::{Sha256, Digest};
+        let mut hasher = Sha256::new();
+        hasher.update(&data);
+        Ok(hasher.finalize().to_vec())
+    }
+
+    pub fn hash_sha512(&self, data: Vec<u8>) -> Result<Vec<u8>> {
+        use sha2::{Sha512, Digest};
+        let mut hasher = Sha512::new();
+        hasher.update(&data);
+        Ok(hasher.finalize().to_vec())
+    }
+}
 
 fn debug_features() {
     println!("[ElasticCrypto] Debug: Checking feature flags...");
@@ -49,124 +243,6 @@ fn debug_features() {
             println!("[ElasticCrypto] Debug: SEV-SNP device exists");
         } else {
             println!("[ElasticCrypto] Debug: SEV-SNP device does not exist");
-        }
-    }
-}
-
-pub trait Crypto {
-    fn generate_key(&self) -> Result<Vec<u8>, Error>;
-    fn encrypt(&self, key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error>;
-    fn decrypt(&self, key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error>;
-}
-
-#[derive(Debug)]
-pub enum CryptoBackend {
-    #[cfg(feature = "linux")]
-    Linux {
-        key: Vec<u8>,
-        aes: AesKey,
-    },
-    #[cfg(feature = "sevsnp")]
-    Sevsnp(SevsnpAes),
-    #[cfg(feature = "wasm")]
-    Wasm(WasmCrypto),
-    #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
-    None,
-}
-
-pub struct ElasticCrypto {
-    backend: CryptoBackend,
-}
-
-impl ElasticCrypto {
-    pub fn new() -> Result<Self, Error> {
-        debug_features();
-        
-        // Try SEV-SNP first if enabled
-        #[cfg(feature = "sevsnp")]
-        {
-            println!("[ElasticCrypto] Debug: Attempting to use SEV-SNP backend");
-            if std::path::Path::new("/dev/sev-guest").exists() {
-                return Ok(Self {
-                    backend: CryptoBackend::Sevsnp(SevsnpAes::new(&vec![0u8; 32])?),
-                });
-            }
-            println!("[ElasticCrypto] Debug: SEV-SNP device not found, falling back to Linux backend");
-        }
-        
-        // Try Linux backend if enabled
-        #[cfg(feature = "linux")]
-        {
-            println!("[ElasticCrypto] Debug: Attempting to use Linux backend");
-            return Ok(Self {
-                backend: CryptoBackend::Linux {
-                    key: vec![0u8; 32],
-                    aes: AesKey::new(&vec![0u8; 32])?,
-                },
-            });
-        }
-        
-        // Try WASM backend if enabled
-        #[cfg(feature = "wasm")]
-        {
-            println!("[ElasticCrypto] Debug: Attempting to use WASM backend");
-            return Ok(Self {
-                backend: CryptoBackend::Wasm(WasmCrypto::new()),
-            });
-        }
-        
-        // If no features are enabled, return error
-        #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
-        {
-            println!("[ElasticCrypto] Debug: No supported backend feature enabled");
-            return Err(Error::UnsupportedOperation);
-        }
-    }
-}
-
-impl Crypto for ElasticCrypto {
-    fn generate_key(&self) -> Result<Vec<u8>, Error> {
-        match &self.backend {
-            #[cfg(feature = "linux")]
-            CryptoBackend::Linux { key, .. } => Ok(key.clone()),
-            #[cfg(feature = "sevsnp")]
-            CryptoBackend::Sevsnp(backend) => Ok(backend.key().to_vec()),
-            #[cfg(feature = "wasm")]
-            CryptoBackend::Wasm(backend) => backend.generate_key(),
-            #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
-            CryptoBackend::None => Err(Error::UnsupportedOperation),
-        }
-    }
-
-    fn encrypt(&self, _key: &[u8], _data: &[u8], _mode: AesMode) -> Result<Vec<u8>, Error> {
-        match &self.backend {
-            #[cfg(feature = "linux")]
-            CryptoBackend::Linux { aes, .. } => aes.encrypt(_data, _mode),
-            #[cfg(feature = "sevsnp")]
-            CryptoBackend::Sevsnp(backend) => {
-                let mut backend = backend.clone();
-                backend.encrypt(_data)
-            }
-            #[cfg(feature = "wasm")]
-            CryptoBackend::Wasm(backend) => backend.encrypt(_key, _data, _mode),
-            #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
-            CryptoBackend::None => Err(Error::UnsupportedOperation),
-        }
-    }
-
-    fn decrypt(&self, _key: &[u8], _data: &[u8], _mode: AesMode) -> Result<Vec<u8>, Error> {
-        match &self.backend {
-            #[cfg(feature = "linux")]
-            CryptoBackend::Linux { aes, .. } => aes.decrypt(_data, _mode),
-            #[cfg(feature = "sevsnp")]
-            CryptoBackend::Sevsnp(backend) => {
-                let mut backend = backend.clone();
-                backend.decrypt(_data)
-            }
-            #[cfg(feature = "wasm")]
-            CryptoBackend::Wasm(backend) => backend.decrypt(_key, _data, _mode),
-            #[cfg(not(any(feature = "linux", feature = "sevsnp", feature = "wasm")))]
-            CryptoBackend::None => Err(Error::UnsupportedOperation),
         }
     }
 }

@@ -26,7 +26,7 @@ impl AesKey {
         match mode {
             AesMode::GCM => {
                 let cipher = Aes256Gcm::new_from_slice(&self.0)
-                    .map_err(|_| Error::EncryptionError)?;
+                    .map_err(|_| Error::EncryptionError("...".to_string()))?;
                 
                 let mut nonce_bytes = [0u8; 12];
                 rand::thread_rng().fill_bytes(&mut nonce_bytes);
@@ -34,7 +34,7 @@ impl AesKey {
                 
                 let ciphertext = cipher
                     .encrypt(nonce, data)
-                    .map_err(|_| Error::EncryptionError)?;
+                    .map_err(|_| Error::EncryptionError("...".to_string()))?;
                 
                 // Prepend nonce to ciphertext
                 let mut result = Vec::with_capacity(nonce_bytes.len() + ciphertext.len());
@@ -53,17 +53,17 @@ impl AesKey {
         match mode {
             AesMode::GCM => {
                 if encrypted_data.len() < 12 {
-                    return Err(Error::DecryptionError);
+                    return Err(Error::DecryptionError("...".to_string()));
                 }
                 
                 let (nonce_bytes, ciphertext) = encrypted_data.split_at(12);
                 let cipher = Aes256Gcm::new_from_slice(&self.0)
-                    .map_err(|_| Error::DecryptionError)?;
+                    .map_err(|_| Error::DecryptionError("...".to_string()))?;
                 
                 let nonce = Nonce::from_slice(nonce_bytes);
                 cipher
                     .decrypt(nonce, ciphertext)
-                    .map_err(|_| Error::DecryptionError)
+                    .map_err(|_| Error::DecryptionError("...".to_string()))
             }
             AesMode::CBC => {
                 // For this example, we'll return an error as CBC is not implemented yet

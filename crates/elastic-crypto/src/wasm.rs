@@ -1,4 +1,5 @@
-use crate::{Error, Crypto};
+// use crate::{Error, Crypto};
+use crate::Error;
 use crate::aes::AesMode;
 use aes_gcm::{
     aead::{Aead, KeyInit},
@@ -38,11 +39,12 @@ impl WasmCrypto {
     pub fn new() -> Self {
         println!("Checking SEV-SNP availability...");
         let is_sevsnp = env::var("ELASTIC_SEV_SNP").map(|v| v == "1").unwrap_or(false);
-        println!("SEV-SNP environment: {}", is_sevsnp);
+        println!("SEV-SNP environment variable: {}", is_sevsnp);
 
         #[cfg(feature = "sevsnp")]
         {
             if is_sevsnp {
+                println!("SEV-SNP feature is enabled");
                 match SevsnpRng::new() {
                     Ok(rng) => {
                         println!("SEV-SNP RNG initialized successfully");
@@ -56,10 +58,14 @@ impl WasmCrypto {
                     }
                     Err(e) => {
                         println!("Failed to initialize SEV-SNP RNG: {:?}", e);
+                        println!("Falling back to Linux mode");
                     }
                 }
+            } else {
+                println!("SEV-SNP environment variable not set to '1'");
             }
             
+            println!("Using Linux mode (no SEV-SNP)");
             Self {
                 inner: UnsafeCell::new(WasmCryptoInner {
                     is_sevsnp: false,
@@ -70,10 +76,14 @@ impl WasmCrypto {
         }
 
         #[cfg(not(feature = "sevsnp"))]
-        Self {
-            inner: UnsafeCell::new(WasmCryptoInner {
-                is_sevsnp: false,
-            }),
+        {
+            println!("SEV-SNP feature is not enabled in build");
+            println!("Using Linux mode (no SEV-SNP)");
+            Self {
+                inner: UnsafeCell::new(WasmCryptoInner {
+                    is_sevsnp: false,
+                }),
+            }
         }
     }
 
@@ -89,13 +99,13 @@ impl WasmCrypto {
         if let Some(rng) = inner.rng.as_mut() {
             rng.get_random_bytes(32)
         } else {
-            Err(Error::SevsnpNotAvailable)
+            Err(Error::SevSnpNotAvailable)
         }
     }
 
     #[cfg(not(feature = "sevsnp"))]
     fn generate_sevsnp_key(&self) -> Result<Vec<u8>, Error> {
-        Err(Error::SevsnpNotAvailable)
+        Err(Error::SevSnpNotAvailable)
     }
 
     #[cfg(feature = "sevsnp")]
@@ -108,13 +118,13 @@ impl WasmCrypto {
         if let Some(aes) = inner.aes.as_mut() {
             aes.encrypt(data)
         } else {
-            Err(Error::SevsnpNotAvailable)
+            Err(Error::SevSnpNotAvailable)
         }
     }
 
     #[cfg(not(feature = "sevsnp"))]
     fn encrypt_sevsnp(&self, _key: &[u8], _data: &[u8], _mode: AesMode) -> Result<Vec<u8>, Error> {
-        Err(Error::SevsnpNotAvailable)
+        Err(Error::SevSnpNotAvailable)
     }
 
     #[cfg(feature = "sevsnp")]
@@ -127,76 +137,12 @@ impl WasmCrypto {
         if let Some(aes) = inner.aes.as_mut() {
             aes.decrypt(data)
         } else {
-            Err(Error::SevsnpNotAvailable)
+            Err(Error::SevSnpNotAvailable)
         }
     }
 
     #[cfg(not(feature = "sevsnp"))]
     fn decrypt_sevsnp(&self, _key: &[u8], _data: &[u8], _mode: AesMode) -> Result<Vec<u8>, Error> {
-        Err(Error::SevsnpNotAvailable)
-    }
-}
-
-impl Crypto for WasmCrypto {
-    fn generate_key(&self) -> Result<Vec<u8>, Error> {
-        // SAFETY: We're in a single-threaded WASM context
-        let inner = unsafe { &*self.inner.get() };
-        if inner.is_sevsnp {
-            println!("Using SEV-SNP key generation");
-            self.generate_sevsnp_key()
-        } else {
-            println!("Using standard key generation");
-            let mut key = vec![0u8; 32];
-            rand::thread_rng().fill_bytes(&mut key);
-            Ok(key)
-        }
-    }
-
-    fn encrypt(&self, key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error> {
-        if key.len() != 32 {
-            return Err(Error::InvalidKeyLength);
-        }
-
-        // SAFETY: We're in a single-threaded WASM context
-        let inner = unsafe { &*self.inner.get() };
-        if inner.is_sevsnp {
-            println!("Using SEV-SNP encryption");
-            self.encrypt_sevsnp(key, data, mode)
-        } else {
-            println!("Using standard encryption");
-            match mode {
-                AesMode::GCM => {
-                    let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| Error::InvalidKeyLength)?;
-                    let nonce = Nonce::from_slice(&[0u8; 12]); // In production, use a random nonce
-                    cipher.encrypt(nonce, data)
-                        .map_err(|_| Error::EncryptionError)
-                }
-                _ => Err(Error::UnsupportedOperation),
-            }
-        }
-    }
-
-    fn decrypt(&self, key: &[u8], data: &[u8], mode: AesMode) -> Result<Vec<u8>, Error> {
-        if key.len() != 32 {
-            return Err(Error::InvalidKeyLength);
-        }
-
-        // SAFETY: We're in a single-threaded WASM context
-        let inner = unsafe { &*self.inner.get() };
-        if inner.is_sevsnp {
-            println!("Using SEV-SNP decryption");
-            self.decrypt_sevsnp(key, data, mode)
-        } else {
-            println!("Using standard decryption");
-            match mode {
-                AesMode::GCM => {
-                    let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| Error::InvalidKeyLength)?;
-                    let nonce = Nonce::from_slice(&[0u8; 12]); // In production, use the same nonce as encryption
-                    cipher.decrypt(nonce, data)
-                        .map_err(|_| Error::DecryptionError)
-                }
-                _ => Err(Error::UnsupportedOperation),
-            }
-        }
+        Err(Error::SevSnpNotAvailable)
     }
 } 

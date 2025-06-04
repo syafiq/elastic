@@ -1,52 +1,131 @@
 package elastic:crypto@0.1.0;
 
 interface types {
+    /// Error types that can be returned by crypto operations
     variant crypto-error {
-        invalid-key(string),
-        invalid-algorithm(string),
-        encryption-error(string),
-        decryption-error(string),
-        signing-error(string),
-        verification-error(string),
-        hashing-error(string),
-        mac-error(string),
+        /// The provided key length is invalid for the operation
+        invalid-key-length,
+        /// A general encryption error occurred
+        encryption-error,
+        /// A general decryption error occurred
+        decryption-error,
+        /// The requested operation is not supported
+        unsupported-operation,
+        /// The specified key handle was not found
+        key-not-found,
+        /// The operation is not permitted (e.g., exporting a secure key)
+        operation-not-permitted,
+        /// SEV-SNP hardware is not available
+        sevsnp-not-available,
+        /// SEV-SNP operation failed with the given error message
+        sevsnp-operation-failed(string),
+        /// SEV-SNP RNG operation failed with the given error message
+        sevsnp-rng-error(string),
+        /// SEV-SNP AES operation failed with the given error message
+        sevsnp-aes-error(string),
+        /// The requested AES mode is not supported
+        unsupported-mode,
+        /// The operation is not implemented
+        not-implemented,
+        /// Encryption operation failed
+        encryption-failed,
+        /// Decryption operation failed
+        decryption-failed,
+        /// The provided ciphertext is invalid
+        invalid-ciphertext,
     }
 
+    /// Types of cryptographic keys supported by the implementation
     enum key-type {
+        /// Symmetric keys (e.g., AES)
         symmetric,
+        /// Asymmetric keys (e.g., RSA, Ed25519)
         asymmetric,
+        /// HMAC keys for message authentication
+        hmac,
     }
 
-    enum algorithm {
-        aes-256-gcm,
-        rsa-2048,
-        rsa-4096,
-        sha-256,
-        sha-512,
-        hmac-sha-256,
+    /// Supported AES encryption modes
+    enum aes-mode {
+        /// Cipher Block Chaining mode (not implemented yet)
+        cbc,
+        /// Galois/Counter Mode (currently implemented)
+        gcm,
+    }
+
+    /// Configuration for key generation and import
+    record key-config {
+        /// The type of key to generate/import
+        key-type: key-type,
+        /// The size of the key in bits (e.g., 256 for AES-256)
+        key-size: u32,
+        /// Whether the key should be stored in secure storage
+        secure-storage: bool,
     }
 }
 
 interface crypto {
-    use types.{crypto-error, key-type, algorithm};
+    use types.{crypto-error, key-type, aes-mode, key-config};
 
-    // Key and algorithm context management
-    load-key: func(key: list<u8>, key-type: key-type, algorithm: algorithm) -> result<u32, crypto-error>;
-    unload-key: func(handle: u32) -> result<_, crypto-error>;
+    /// Key Management Operations
+    /// ------------------------
 
-    // Public key operations
-    public-key-encrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
-    public-key-decrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+    /// Generate a new cryptographic key with the specified configuration
+    /// Returns a handle to the generated key
+    generate-key: func(config: key-config) -> result<u32, crypto-error>;
+
+    /// Import an existing key with the specified configuration
+    /// Returns a handle to the imported key
+    import-key: func(key-data: list<u8>, config: key-config) -> result<u32, crypto-error>;
+
+    /// Export a key's data using its handle
+    /// Note: Will fail if the key is marked as secure-storage
+    export-key: func(handle: u32) -> result<list<u8>, crypto-error>;
+
+    /// Delete a key using its handle
+    delete-key: func(handle: u32) -> result<_, crypto-error>;
+
+    /// Encryption Operations
+    /// --------------------
+
+    /// Encrypt data using the key identified by the handle
+    /// For symmetric keys, uses AES-GCM
+    encrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+
+    /// Decrypt data using the key identified by the handle
+    /// For symmetric keys, uses AES-GCM
+    decrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+
+    /// Signing Operations
+    /// ----------------
+
+    /// Sign data using the key identified by the handle
+    /// Only works with asymmetric keys
     sign: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+
+    /// Verify a signature using the key identified by the handle
+    /// Only works with asymmetric keys
     verify: func(handle: u32, data: list<u8>, signature: list<u8>) -> result<bool, crypto-error>;
 
-    // Symmetric operations
-    symmetric-encrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
-    symmetric-decrypt: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+    /// MAC Operations
+    /// ------------
 
-    // Hashing and MAC
-    hash: func(algorithm: algorithm, data: list<u8>) -> result<list<u8>, crypto-error>;
+    /// Calculate a Message Authentication Code (MAC) using the key identified by the handle
+    /// Only works with HMAC keys
     calculate-mac: func(handle: u32, data: list<u8>) -> result<list<u8>, crypto-error>;
+
+    /// Verify a Message Authentication Code (MAC) using the key identified by the handle
+    /// Only works with HMAC keys
+    verify-mac: func(handle: u32, data: list<u8>, mac: list<u8>) -> result<bool, crypto-error>;
+
+    /// Hashing Operations
+    /// ----------------
+
+    /// Calculate SHA-256 hash of the input data
+    hash: func(data: list<u8>) -> result<list<u8>, crypto-error>;
+
+    /// Calculate SHA-512 hash of the input data
+    hash-sha512: func(data: list<u8>) -> result<list<u8>, crypto-error>;
 }
 
 world crypto-impl {
