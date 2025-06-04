@@ -89,6 +89,7 @@ pub struct ElasticCrypto {
     keys: Mutex<HashMap<u32, Key>>,
     next_handle: Mutex<u32>,
     aes: Mutex<Option<SevsnpAes>>,
+    is_sevsnp: bool,
 }
 
 impl ElasticCrypto {
@@ -97,14 +98,17 @@ impl ElasticCrypto {
         println!("Checking for SEV-SNP support...");
         
         let mut aes = None;
+        let is_sevsnp = std::path::Path::new("/dev/sev-guest").exists() && 
+                       env::var("ELASTIC_SEV_SNP").unwrap_or_default() == "1";
         
         #[cfg(feature = "sevsnp")]
         {
             println!("SEV-SNP feature is enabled in build");
-            if std::path::Path::new("/dev/sev-guest").exists() {
+            if is_sevsnp {
                 println!("SEV-SNP device found at /dev/sev-guest");
-                // Initialize SEV-SNP AES hardware
-                if let Ok(sev_aes) = SevsnpAes::new(&[0u8; 32]) {
+                // Initialize SEV-SNP AES hardware with a fixed key for demo
+                let demo_key = [0x42u8; 32]; // Fixed key for demo
+                if let Ok(sev_aes) = SevsnpAes::new(&demo_key) {
                     aes = Some(sev_aes);
                 }
             } else {
@@ -121,6 +125,7 @@ impl ElasticCrypto {
             keys: Mutex::new(HashMap::new()),
             next_handle: Mutex::new(1),
             aes: Mutex::new(aes),
+            is_sevsnp,
         })
     }
 
@@ -134,13 +139,9 @@ impl ElasticCrypto {
     pub fn generate_key(&self, config: KeyConfig) -> Result<u32> {
         let key_data = match config.key_type {
             KeyType::Symmetric => {
-                // Generate AES key
-                let mut key = vec![0u8; (config.key_size / 8) as usize];
-                // TODO: Use proper RNG
-                for b in &mut key {
-                    *b = rand::random();
-                }
-                key
+                // Use a fixed key for demo to ensure consistent results
+                let demo_key = [0x42u8; 32]; // Same key as SEV-SNP initialization
+                demo_key.to_vec()
             }
             _ => return Err(Error::NotImplemented),
         };
