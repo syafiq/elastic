@@ -42,6 +42,36 @@ enum error {
 }
 ```
 
+This interface is implemented differently on each platform:
+
+### Linux Implementation
+```rust
+// crates/elastic-crypto/src/linux.rs
+impl Crypto for LinuxCrypto {
+    fn encrypt(&self, handle: u32, data: Vec<u8>) -> Result<Vec<u8>> {
+        // Uses Linux crypto backend (e.g., /dev/crypto)
+        let cipher = aes_gcm::Aes256Gcm::new_from_slice(&key.data)?;
+        let nonce = aes_gcm::Nonce::from_slice(b"elastic-nc12");
+        cipher.encrypt(nonce, data.as_ref())
+    }
+}
+```
+
+### SEV-SNP Implementation
+```rust
+// crates/elastic-crypto/src/sev/mod.rs
+impl Crypto for SevsnpCrypto {
+    fn encrypt(&self, handle: u32, data: Vec<u8>) -> Result<Vec<u8>> {
+        // Uses SEV-SNP hardware crypto
+        if let Some(aes) = self.aes.as_mut() {
+            aes.encrypt(data)
+        } else {
+            Err(Error::SevsnpNotAvailable)
+        }
+    }
+}
+```
+
 ## Complete Cross-Platform Workflow
 
 ### 1. Build on Local Machine
@@ -78,32 +108,14 @@ wasmtime --env ELASTIC_SEV_SNP=1 --dir /dev ~/demo/crypto-demo.wasm
 The same WIT interface is implemented differently on each platform:
 
 ### Linux Implementation
-```rust
-// crates/elastic-crypto/src/linux.rs
-impl Crypto for LinuxCrypto {
-    fn encrypt(&self, handle: u32, data: Vec<u8>) -> Result<Vec<u8>> {
-        // Uses Linux crypto backend (e.g., /dev/crypto)
-        let cipher = aes_gcm::Aes256Gcm::new_from_slice(&key.data)?;
-        let nonce = aes_gcm::Nonce::from_slice(b"elastic-nc12");
-        cipher.encrypt(nonce, data.as_ref())
-    }
-}
-```
+- Uses the Linux crypto backend
+- No special hardware requirements
+- Implementation in `crates/elastic-crypto/src/linux.rs`
 
 ### SEV-SNP Implementation
-```rust
-// crates/elastic-crypto/src/sev/mod.rs
-impl Crypto for SevsnpCrypto {
-    fn encrypt(&self, handle: u32, data: Vec<u8>) -> Result<Vec<u8>> {
-        // Uses SEV-SNP hardware crypto
-        if let Some(aes) = self.aes.as_mut() {
-            aes.encrypt(data)
-        } else {
-            Err(Error::SevsnpNotAvailable)
-        }
-    }
-}
-```
+- Uses SEV-SNP hardware crypto
+- Requires `/dev/sev-guest`
+- Implementation in `crates/elastic-crypto/src/sev/mod.rs`
 
 ## What to Expect
 
