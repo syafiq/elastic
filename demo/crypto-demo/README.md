@@ -2,6 +2,50 @@
 
 This demo demonstrates the "build once, run anywhere" principle of the Elastic Crypto HAL. The same WASM binary can run on different platforms (Linux and SEV-SNP) using different hardware backends while maintaining consistent behavior.
 
+## Demo Code
+
+Here's the actual code that uses the HAL (`demo/crypto-demo/src/main.rs`):
+
+```rust
+use elastic_crypto::crypto::{Crypto, KeyConfig, KeyType};
+
+fn main() {
+    // Initialize the crypto HAL
+    let crypto = Crypto::new().expect("Failed to initialize crypto");
+    
+    // Generate a symmetric key
+    let key_config = KeyConfig {
+        key_type: KeyType::Symmetric,
+        key_size: 256,
+        secure_storage: false,
+    };
+    let key_handle = crypto.generate_key(key_config).expect("Failed to generate key");
+    
+    // Test data
+    let test_data = b"Hello, Elastic Crypto!";
+    println!("Test data: {}", String::from_utf8_lossy(test_data));
+    
+    // Encrypt
+    let encrypted = crypto.encrypt(key_handle, test_data.to_vec())
+        .expect("Failed to encrypt");
+    println!("Encrypted (base64): {}", base64::encode(&encrypted));
+    
+    // Decrypt
+    let decrypted = crypto.decrypt(key_handle, encrypted)
+        .expect("Failed to decrypt");
+    println!("Decrypted: {}", String::from_utf8_lossy(&decrypted));
+    
+    // Verify
+    assert_eq!(test_data, decrypted.as_slice(), "Decryption failed");
+}
+```
+
+This code:
+1. Uses the common WIT interface
+2. Works on both Linux and SEV-SNP without changes
+3. Gets different hardware backends automatically
+4. Produces consistent results across platforms
+
 ## WIT Interface
 
 The demo uses this WIT interface (`crates/elastic-crypto/wit/crypto.wit`):
