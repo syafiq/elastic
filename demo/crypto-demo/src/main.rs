@@ -1,8 +1,14 @@
 use elastic_crypto::{ElasticCrypto, KeyConfig, KeyType};
-use std::env;
 use base64::Engine;
+use std::env;
 
 fn main() {
+    // Debug: Print all environment variables
+    println!("Environment variables:");
+    for (key, value) in env::vars() {
+        println!("{} = {}", key, value);
+    }
+    
     // Initialize crypto
     let crypto = ElasticCrypto::new().expect("Failed to initialize crypto");
     
