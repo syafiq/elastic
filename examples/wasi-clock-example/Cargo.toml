@@ -1,0 +1,11 @@
+[package]
+name = "wasi-clock-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wasi-clock = { path = "../../crates/wasi-clock", features = ["sevsnp"] }
+wasi = "0.14.2+wasi-0.2.4"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasi = "0.14.2+wasi-0.2.4" 

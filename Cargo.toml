@@ -2,8 +2,11 @@
 members = [
     "crates/elastic-file",
     "crates/elastic-crypto",
+    "crates/elastic-clock",
+    "crates/wasi-clock",
     "crates/file-demo",
-    "demo/crypto-demo"
+    "demo/crypto-demo",
+    "examples/wasi-clock-example"
 ]
 resolver = "2"
 
